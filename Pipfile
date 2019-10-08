@@ -11,6 +11,8 @@ autopep8 = "*"
 django = "*"
 django-heroku = "*"
 gunicorn = "*"
+djangorestframework = "*"
+graphene-django = "*"
 
 [requires]
 python_version = "3.7"

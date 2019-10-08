@@ -123,4 +123,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
+ETRADE_API_KEY = os.environ.get('ETRADE_API_KEY', None)
+ETRADE_API_URL = os.environ.get('ETRADE_API_URL', None)
+
 django_heroku.settings(locals())
