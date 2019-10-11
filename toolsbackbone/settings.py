@@ -81,10 +81,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'HOST': 'localhost',
-        'PORT': 5433,
+        'PORT': os.environ.get('DB_PORT', 5432),
         'NAME': 'toolsbackbone',
-        'USER': 'toolsbackbone',
-        'PASSWORD': 'Zaq12wsX'
+        'USER': os.environ.get('DB_USER', None),
+        'PASSWORD': os.environ.get('DB_PASS', None)
     }
 }
 
