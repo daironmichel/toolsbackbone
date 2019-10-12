@@ -16,10 +16,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_auth.views import LoginView, LogoutView
+from api.graphql.views import PrivateGraphQLView
 
 urlpatterns = [
     path('', admin.site.urls),
     path('api/login/', LoginView.as_view(), name='rest_login'),
     # URLs that require a user to be logged in with a valid session / token.
-    path('api/logout/', LogoutView.as_view(), name='rest_logout')
+    path('api/logout/', LogoutView.as_view(), name='rest_logout'),
+    path('api/graphql/', PrivateGraphQLView.as_view(graphiql=True))
 ]

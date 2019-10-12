@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'rest_auth',
+    'graphene_django',
     'api',
     'trader'
 ]
@@ -108,6 +109,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+
 # rest framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -115,6 +119,12 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ]
+}
+
+
+# GraphQL
+GRAPHENE = {
+    'SCHEMA': 'api.graphql.schema.schema'
 }
 
 
