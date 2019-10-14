@@ -53,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.middleware.AuthorizationMiddleware',
 ]
 
 ROOT_URLCONF = 'toolsbackbone.urls'
@@ -115,8 +116,6 @@ LOGIN_REDIRECT_URL = '/'
 # rest framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.BasicAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ]
 }
@@ -125,6 +124,12 @@ REST_FRAMEWORK = {
 # GraphQL
 GRAPHENE = {
     'SCHEMA': 'api.graphql.schema.schema'
+}
+
+
+# API Keys
+AUTHORIZED_APPS = {
+    'trater': os.environ.get('TRADER_SECRET_KEY', None)
 }
 
 
@@ -149,5 +154,6 @@ STATIC_URL = '/static/'
 
 ETRADE_API_KEY = os.environ.get('ETRADE_API_KEY', None)
 ETRADE_API_URL = os.environ.get('ETRADE_API_URL', None)
+
 
 django_heroku.settings(locals())

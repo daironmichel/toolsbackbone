@@ -18,16 +18,33 @@ class RiskManagementSettingsNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
 
-class Viewer(graphene.ObjectType):
+class ViewerCredentialsType(graphene.ObjectType):
+    database_id = graphene.Int()
+    full_name = graphene.String()
+
+    def resolve_database_id(self, info, **kwargs):
+        return info.context.user.id
+    full_name = graphene.String()
+
+    def resolve_full_name(self, info, **kwargs):
+        user = info.context.user
+        return f'{user.first_name} {user.last_name}'.strip() or user.username
+
+
+class ViewerType(graphene.ObjectType):
+    credentials = graphene.Field(ViewerCredentialsType)
     risk_management_settings = graphene.Field(RiskManagementSettingsNode)
+
+    def resolve_credentials(self, info, **kwargs):
+        return ViewerCredentialsType()
 
     def resolve_risk_management_settings(self, info, **kwargs):
         return info.context.user.risk_management_settings
 
 
 class Query(graphene.ObjectType):
-    viewer = graphene.Field(Viewer)
+    viewer = graphene.Field(ViewerType)
     risk_management_settings = relay.Node.Field(RiskManagementSettingsNode)
 
     def resolve_viewer(self, info, **kwargs):
-        return Viewer()
+        return ViewerType()
