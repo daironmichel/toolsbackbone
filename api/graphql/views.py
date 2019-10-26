@@ -1,28 +1,30 @@
-from django.contrib.auth.mixins import AccessMixin, LoginRequiredMixin
-from graphene_django.views import GraphQLView
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.authentication import TokenAuthentication
-from rest_framework import exceptions
+from django.contrib.auth import login
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http.request import HttpRequest
 from django.http.response import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from graphene_django.views import GraphQLView
+from rest_framework import exceptions
+from rest_framework.authentication import TokenAuthentication
 
 
-class TokenAuthRequiredMixin(AccessMixin):
-    """Verify that the current user is authenticated."""
+class TokenAuthRequiredMixin(LoginRequiredMixin):
+    """Authenticate the user using token auth and 
+    verify that the user was authenticated."""
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: HttpRequest, *args, **kwargs):
+        if request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
         authenticator = TokenAuthentication()
         try:
-            auth_result = authenticator.authenticate(request)
+            user, token = authenticator.authenticate(request)
         except exceptions.AuthenticationFailed as e:
             return HttpResponse(content=str(e), status=e.status_code)
 
-        if not auth_result:
-            return HttpResponse(content="Missing Token", status=401)
+        request.user = user
+        request.auth = token
 
-        request.user = auth_result[0]
-
-        if not request.user.is_authenticated:
-            return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
 

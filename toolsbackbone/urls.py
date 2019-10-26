@@ -14,17 +14,18 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
-from django.views.decorators.csrf import csrf_exempt
+from django.urls import include, path
 from rest_auth.views import LoginView, LogoutView
-from api.graphql.views import PrivateGraphQLView, TokenAuthGraphQLView
 
+from api.graphql.views import PrivateGraphQLView, TokenAuthGraphQLView
+from api.views import credentials
 
 urlpatterns = [
     path('', admin.site.urls),
     path('api/login/', LoginView.as_view(), name='rest_login'),
     # URLs that require a user to be logged in with a valid session / token.
     path('api/logout/', LogoutView.as_view(), name='rest_logout'),
+    path('api/credentials/', credentials, name='rest_credentials'),
     path('api/gql/', TokenAuthGraphQLView.as_view(graphiql=False)),
     path('graphiql/', PrivateGraphQLView.as_view(graphiql=True))
 ]

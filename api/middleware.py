@@ -1,31 +1,34 @@
 from django.conf import settings
-from django.http.response import HttpResponse
+from django.contrib.auth import login
 from django.http.request import HttpRequest
-from django.contrib.auth.middleware import AuthenticationMiddleware
+from django.http.response import HttpResponse
 from graphene_django.debug import DjangoDebugMiddleware
+from rest_framework import exceptions
+from rest_framework.authentication import TokenAuthentication
 
 
-class AuthorizationMiddleware:
+class TokenAuthMiddleware:
     def __init__(self, get_response=None):
         self.get_response = get_response
         super().__init__()
 
     def __call__(self, request: HttpRequest):
-        # for k, v in request.META.items():
-        #     print(f'{k}: {v}')
-        # if request.path.startswith('/api') and not request.path.startswith('/api/graphql/'):
-        #     app_name = request.META.get('HTTP_X_APP_NAME', '')
-        #     app_key = request.META.get('HTTP_X_APP_KEY', '')
+        print('HTTP_AUTHORIZATION:', request.META.get(
+            'HTTP_AUTHORIZATION', None))
+        # if request.user.is_authenticated:
+        #     return self.get_response(request)
 
-        #     lock = getattr(settings, 'AUTHORIZED_APPS', {})
+        # authenticator = TokenAuthentication()
+        # try:
+        #     auth_result = authenticator.authenticate(request)
+        # except exceptions.AuthenticationFailed:
+        #     return self.get_response(request)
 
-        #     if app_name not in lock:
-        #         return HttpResponse(status=401, content='Invalid App!')
+        # if not auth_result:
+        #     return self.get_response(request)
 
-        #     if lock.get(app_name) != app_key:
-        #         return HttpResponse(status=401, content='Invalid Key!')
-        # authenticator = BearerTokenAuthentication()
-        # user, token = authenticator.authenticate(request)
-        # request.user = user
+        # user = auth_result[0]
+
+        # login(request, user)
 
         return self.get_response(request)

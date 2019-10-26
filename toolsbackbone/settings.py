@@ -53,7 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'api.middleware.AuthorizationMiddleware',
+    # 'api.middleware.TokenAuthMiddleware',
 ]
 
 ROOT_URLCONF = 'toolsbackbone.urls'
@@ -113,9 +113,14 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 
+# django-rest-auth
+ACCOUNT_LOGOUT_ON_GET = True
+
 # rest framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ]
 }
