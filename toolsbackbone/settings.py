@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/2.2/ref/settings/
 """
 import django_heroku
 import os
+from distutils.util import strtobool
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +24,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '!8(y8(55&m6i*yp_8z4do-c7$bbpg+=02)d5k6_-87m&1wzzgf'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(os.environ.get('DEBUG', 0))
+DEBUG = bool(strtobool(os.environ.get('DJANGO_DEBUG', 'false')))
 
 ALLOWED_HOSTS = []
 
@@ -84,10 +85,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'HOST': 'localhost',
-        'PORT': os.environ.get('DB_PORT', 5432),
-        'NAME': 'toolsbackbone',
-        'USER': os.environ.get('DB_USER', None),
-        'PASSWORD': os.environ.get('DB_PASS', None)
+        'PORT': int(os.environ.get('DJANGO_DB_PORT', 5432)),
+        'NAME': os.environ.get('DJANGO_DB_NAME', None),
+        'USER': os.environ.get('DJANGO_DB_USER', None),
+        'PASSWORD': os.environ.get('DJANGO_DB_PASS', None)
     }
 }
 
@@ -134,7 +135,7 @@ GRAPHENE = {
 
 # API Keys
 AUTHORIZED_APPS = {
-    'trater': os.environ.get('TRADER_SECRET_KEY', None)
+    'trater': os.environ.get('DJANGO_TRADER_SECRET_KEY', None)
 }
 
 
@@ -157,8 +158,26 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-ETRADE_API_KEY = os.environ.get('ETRADE_API_KEY', None)
-ETRADE_API_URL = os.environ.get('ETRADE_API_URL', None)
+ETRADE_API_KEY = os.environ.get('DJANGO_ETRADE_API_KEY', None)
+ETRADE_API_URL = os.environ.get('DJANGO_ETRADE_API_URL', None)
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler'
+        },
+    },
+    'loggers': {
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        }
+    },
+}
 
-django_heroku.settings(locals())
+django_heroku.settings(locals(), logging=bool(
+    strtobool(os.environ.get('DJANGO_HEROKU_LOGGING', 'true'))))
