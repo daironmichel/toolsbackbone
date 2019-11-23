@@ -14,6 +14,7 @@ gunicorn = "*"
 djangorestframework = "*"
 graphene-django = "*"
 django-rest-auth = "*"
+rauth = "*"
 
 [requires]
 python_version = "3.7"

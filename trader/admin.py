@@ -1,5 +1,6 @@
 from django.contrib import admin
-from trader.models import RiskStrategy, Broker, Account
+
+from trader.models import Account, Broker, RiskStrategy, ServiceProvider
 
 # Register your models here.
 
@@ -19,3 +20,8 @@ class BrokerAdmin(admin.ModelAdmin):
 class AccountAdmin(admin.ModelAdmin):
     list_display = ('user', 'name', 'number',
                     'purchasing_power', 'last_updated')
+
+
+@admin.register(ServiceProvider)
+class ServiceProviderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'protocol', 'broker', 'user')

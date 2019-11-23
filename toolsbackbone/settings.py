@@ -9,9 +9,10 @@ https://docs.djangoproject.com/en/2.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.2/ref/settings/
 """
-import django_heroku
 import os
 from distutils.util import strtobool
+
+import django_heroku
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -114,30 +115,6 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 
-# django-rest-auth
-ACCOUNT_LOGOUT_ON_GET = True
-
-# rest framework
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.BasicAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
-    ]
-}
-
-
-# GraphQL
-GRAPHENE = {
-    'SCHEMA': 'api.graphql.schema.schema'
-}
-
-
-# API Keys
-AUTHORIZED_APPS = {
-    'trater': os.environ.get('DJANGO_TRADER_SECRET_KEY', None)
-}
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/2.2/topics/i18n/
@@ -158,9 +135,6 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-ETRADE_API_KEY = os.environ.get('DJANGO_ETRADE_API_KEY', None)
-ETRADE_API_URL = os.environ.get('DJANGO_ETRADE_API_URL', None)
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -175,9 +149,56 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': True,
+        },
+        'api': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
         }
     },
 }
 
+
+# ---------------------------------------------------------
+#
+# Third Party Settings
+#
+# ---------------------------------------------------------
+
+
+# ---------------------------
+# rest framework
+# ---------------------------
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ]
+}
+
+
+# ---------------------------
+# django-rest-auth
+# ---------------------------
+
+ACCOUNT_LOGOUT_ON_GET = True
+
+
+# ---------------------------
+# Graphene Settings
+# ---------------------------
+
+GRAPHENE = {
+    'SCHEMA': 'api.graphql.schema.schema'
+}
+
+
+# ---------------------------
+# Heroku settings
+# ---------------------------
+
+# This should always be the last line
 django_heroku.settings(locals(), logging=bool(
     strtobool(os.environ.get('DJANGO_HEROKU_LOGGING', 'true'))))
