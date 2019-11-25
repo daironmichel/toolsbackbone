@@ -1,11 +1,13 @@
+# pylint: disable=no-member
 import logging
 
 import graphene
 from graphene import relay
 from rauth import OAuth1Service
 
-from api.graphql.types import ServiceProviderNode
+from api.graphql.types import ServiceProviderNode, AccountNode
 from trader.models import ProviderSession
+from trader.providers import Etrade
 
 logger = logging.getLogger("api")
 
@@ -36,36 +38,21 @@ class ConnectProvider(relay.ClientIDMutation):
                 error_message="Sorry! the provider you're trying to connect to was not found."
             )
 
-        service = OAuth1Service(
-            name=provider.name,
-            consumer_key=provider.consumer_key,
-            consumer_secret=provider.consumer_secret,
-            request_token_url=provider.request_token_url,
-            access_token_url=provider.access_token_url,
-            authorize_url=provider.authorize_url,
-            base_url=provider.base_url
-        )
-
-        request_token, request_token_secret = service.get_request_token(
-            params={"oauth_callback": "oob", "format": "json"})
-        authorize_url = f'{service.authorize_url}?key={service.consumer_key}&token={request_token}'
-
-        if provider.session:
-            provider.session.delete()
-        provider.session = ProviderSession.objects.create(
-            request_token=request_token, request_token_secret=request_token_secret)
-        provider.save()
+        etrade = Etrade(provider)
+        authorize_url = etrade.get_authorize_url()
 
         return ConnectProvider(service_provider=provider, authorize_url=authorize_url, callback_enabled=False)
 
 
 class AuthorizeConnectionError(graphene.Enum):
-    PENDING_SESSION_NOT_FOUND = 1
-    MULTIPLE_PENDING_SESSIONS_FOUND = 2
+    SESSION_NOT_FOUND = 1
+    MULTIPLE_SESSIONS = 2
+    INCOMPATIBLE_STATE = 3
 
 
 class AuthorizeConnection(relay.ClientIDMutation):
     class Input:
+        request_token = graphene.String()
         aouth_verifier = graphene.String()
 
     service_provider = graphene.Field(ServiceProviderNode)
@@ -74,9 +61,49 @@ class AuthorizeConnection(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, oauth_verifier):
-        provider = info.context.user.service_providers.filter()
+    def mutate_and_get_payload(cls, root, info, request_token, oauth_verifier):
+        provider_query = info.context.user.service_providers.filter(
+            session__request_token=request_token).select_related('session')
+
+        if provider_query.count() > 1:
+            return AuthorizeConnection(error=AuthorizeConnectionError.MULTIPLE_SESSIONS,
+                                       error_message="Multiple sessions found. Try starting a new connection.")
+
+        provider = provider_query.first()
+
+        if not provider:
+            return AuthorizeConnection(error=AuthorizeConnectionError.SESSION_NOT_FOUND,
+                                       error_message="Pending session not found. Try starting a new connection.")
+
+        if provider.session.status != ProviderSession.REQUESTING:
+            return AuthorizeConnection(error=AuthorizeConnectionError.INCOMPATIBLE_STATE,
+                                       error_message="Session state is not compatible. Try starting a new connection.")
+
+        etrade = Etrade(provider)
+        provider = etrade.authorize(oauth_verifier)
+
+        return AuthorizeConnection(service_provider=provider)
+
+
+class BuyStockError(graphene.Enum):
+    INVALID = 1
+
+
+class BuyStock(relay.ClientIDMutation):
+    class Input:
+        strategy_id = graphene.ID()
+        account_id = graphene.String()
+
+    account = graphene.Field(AccounNode)
+
+    error = graphene.Field(AuthorizeConnectionError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, request_token, oauth_verifier):
 
 
 class Mutation(graphene.ObjectType):
     connect_provider = ConnectProvider.Field()
+    authorize_connection = AuthorizeConnection.Field()
+    buy_stock = BuyStock.Field()

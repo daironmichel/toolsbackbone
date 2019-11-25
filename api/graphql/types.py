@@ -3,8 +3,8 @@ import graphene
 from graphene import relay
 from graphene_django.types import DjangoObjectType
 
-from trader.models import (Broker, ProviderSession, RiskStrategy,
-                           ServiceProvider)
+from trader.models import (Broker, ProviderSession, TradingStrategy,
+                           ServiceProvider, Account, Position, Order)
 
 
 class DatabaseId(graphene.Interface):
@@ -14,15 +14,15 @@ class DatabaseId(graphene.Interface):
         return getattr(self, 'id')
 
 
-class RiskStrategyNode(DjangoObjectType):
+class TradingStrategyNode(DjangoObjectType):
     class Meta:
         exclude_fields = ('user',)
-        model = RiskStrategy
+        model = TradingStrategy
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
     def get_node(cls, info, id):
-        return RiskStrategy.objects.get(id=id)
+        return TradingStrategy.objects.get(id=id)
 
 
 class SessionStatus(graphene.Enum):
@@ -70,6 +70,36 @@ class BrokerNode(DjangoObjectType):
         return Broker.objects.get(id=id)
 
 
+class AccountNode(DjangoObjectType):
+    class Meta:
+        model = Account
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    def get_node(cls, info, id):
+        return Account.objects.get(id=id)
+
+
+class PositionNode(DjangoObjectType):
+    class Meta:
+        model = Position
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    def get_node(cls, info, id):
+        return Position.objects.get(id=id)
+
+
+class OrderNode(DjangoObjectType):
+    class Meta:
+        model = Order
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    def get_node(cls, info, id):
+        return Order.objects.get(id=id)
+
+
 class ViewerCredentialsType(graphene.ObjectType):
     database_id = graphene.Int()
     full_name = graphene.String()
@@ -84,17 +114,29 @@ class ViewerCredentialsType(graphene.ObjectType):
 
 class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType)
-    risk_strategies = graphene.List(RiskStrategyNode)
+    trading_strategies = graphene.List(TradingStrategyNode)
     brokers = graphene.List(BrokerNode)
+    accounts = graphene.Lis(AccountNode)
+    positions = graphene.List(PositionNode)
+    orders = graphene.List(OrderNode)
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
 
-    def resolve_risk_strategies(self, info, **kwargs):
-        return info.context.user.risk_strategies.all()
+    def resolve_trading_strategies(self, info, **kwargs):
+        return info.context.user.trading_strategies.all()
 
     def resolve_brokers(self, info, **kwargs):
         return info.context.user.brokers.all()
+
+    def resolve_accounts(self, info, **kwargs):
+        return info.context.user.accounts.all()
+
+    def resolve_prositions(self, info, **kwargs):
+        return info.context.user.positions.all()
+
+    def resolve_orders(self, info, **kwargs):
+        return info.context.user.orders.all()
 
 
 class Query(graphene.ObjectType):
