@@ -1,10 +1,10 @@
-# pylint: disable=no-member
 import graphene
 from graphene import relay
 from graphene_django.types import DjangoObjectType
 
-from trader.models import (Broker, ProviderSession, TradingStrategy,
-                           ServiceProvider, Account, Position, Order)
+from trader.models import (Account, Broker, Order, Position, ProviderSession,
+                           ServiceProvider, TradingStrategy)
+from trader.providers import Etrade
 
 
 class DatabaseId(graphene.Interface):
@@ -21,6 +21,7 @@ class TradingStrategyNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return TradingStrategy.objects.get(id=id)
 
@@ -42,12 +43,24 @@ class ProviderSessionNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return ProviderSession.objects.get(id=id)
 
 
+class QuoteType(graphene.ObjectType):
+    volume = graphene.Int()
+    last_trade = graphene.Float()
+    last_trade_direction = graphene.Float()
+    market_cap = graphene.Float()
+    shares_outstanding = graphene.Int()
+    primary_exchange = graphene.String()
+    company_name = graphene.String()
+
+
 class ServiceProviderNode(DjangoObjectType):
     session = graphene.Field(ProviderSessionNode)
+    quote = graphene.Field(QuoteType, symbol=graphene.String())
 
     class Meta:
         exclude_fields = ('user', 'broker')
@@ -55,8 +68,26 @@ class ServiceProviderNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return ServiceProvider.objects.get(id=id)
+
+    def resolve_quote(self, info, symbol):
+        etrade = Etrade(self)
+        quote_data = etrade.get_quote(symbol)
+
+        if not quote_data:
+            return None
+
+        return QuoteType(
+            volume=quote_data.get('All').get('totalVolume'),
+            last_trade=quote_data.get('All').get('lastTrade'),
+            last_trade_direction=quote_data.get('All').get('dirLast'),
+            market_cap=quote_data.get('All').get('marketCap'),
+            shares_outstanding=quote_data.get('All').get('sharesOutstanding'),
+            primary_exchange=quote_data.get('All').get('primaryExchange'),
+            company_name=quote_data.get('All').get('companyName'),
+        )
 
 
 class BrokerNode(DjangoObjectType):
@@ -66,6 +97,7 @@ class BrokerNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return Broker.objects.get(id=id)
 
@@ -76,6 +108,7 @@ class AccountNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return Account.objects.get(id=id)
 
@@ -86,6 +119,7 @@ class PositionNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return Position.objects.get(id=id)
 
@@ -96,6 +130,7 @@ class OrderNode(DjangoObjectType):
         interfaces = (relay.Node, DatabaseId)
 
     @classmethod
+    # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return Order.objects.get(id=id)
 
@@ -116,7 +151,7 @@ class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType)
     trading_strategies = graphene.List(TradingStrategyNode)
     brokers = graphene.List(BrokerNode)
-    accounts = graphene.Lis(AccountNode)
+    accounts = graphene.List(AccountNode)
     positions = graphene.List(PositionNode)
     orders = graphene.List(OrderNode)
 

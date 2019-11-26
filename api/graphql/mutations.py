@@ -1,19 +1,18 @@
-# pylint: disable=no-member
 import logging
 
 import graphene
 from graphene import relay
-from rauth import OAuth1Service
 
-from api.graphql.types import ServiceProviderNode, AccountNode
+from api.graphql.types import AccountNode, BrokerNode, ServiceProviderNode
 from trader.models import ProviderSession
 from trader.providers import Etrade
 
+# pylint: disable=invalid-name
 logger = logging.getLogger("api")
 
 
 class ConnectProviderError(graphene.Enum):
-    PROVIDER_NOT_FOUND = 1
+    PROVIDER_NOT_FOUND = "PROVIDER_NOT_FOUND"
 
 
 class ConnectProvider(relay.ClientIDMutation):
@@ -45,14 +44,13 @@ class ConnectProvider(relay.ClientIDMutation):
 
 
 class AuthorizeConnectionError(graphene.Enum):
-    SESSION_NOT_FOUND = 1
-    MULTIPLE_SESSIONS = 2
-    INCOMPATIBLE_STATE = 3
+    PROVIDER_NOT_FOUND = 'PROVIDER_NOT_FOUND'
+    INCOMPATIBLE_STATE = 'INCOMPATIBLE_STATE'
 
 
 class AuthorizeConnection(relay.ClientIDMutation):
     class Input:
-        request_token = graphene.String()
+        provider_id = graphene.ID()
         aouth_verifier = graphene.String()
 
     service_provider = graphene.Field(ServiceProviderNode)
@@ -61,15 +59,11 @@ class AuthorizeConnection(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, request_token, oauth_verifier):
-        provider_query = info.context.user.service_providers.filter(
-            session__request_token=request_token).select_related('session')
-
-        if provider_query.count() > 1:
-            return AuthorizeConnection(error=AuthorizeConnectionError.MULTIPLE_SESSIONS,
-                                       error_message="Multiple sessions found. Try starting a new connection.")
-
-        provider = provider_query.first()
+    def mutate_and_get_payload(cls, root, info, provider_id, oauth_verifier):
+        provider = info.context.user.service_providers \
+            .filter(id=provider_id) \
+            .select_related('session') \
+            .first()
 
         if not provider:
             return AuthorizeConnection(error=AuthorizeConnectionError.SESSION_NOT_FOUND,
@@ -85,6 +79,36 @@ class AuthorizeConnection(relay.ClientIDMutation):
         return AuthorizeConnection(service_provider=provider)
 
 
+class SyncAccountsError(graphene.Enum):
+    PROVIDER_NOT_FOUND = 'PROVIDER_NOT_FOUND'
+
+
+class SyncAccounts(relay.ClientIDMutation):
+    class Input:
+        provider_id = graphene.ID()
+
+    boker = graphene.Field(BrokerNode)
+
+    error = graphene.Field(AuthorizeConnectionError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, provider_id):
+        provider = info.context.user.service_providers \
+            .filter(id=provider_id) \
+            .select_related('session') \
+            .first()
+
+        if not provider:
+            return AuthorizeConnection(error=SyncAccounts.PROVIDER_NOT_FOUND,
+                                       error_message="Pending session not found. Try starting a new connection.")
+
+        etrade = Etrade(provider)
+        etrade.sync_accounts()
+
+        return SyncAccounts(broker=provider.broker)
+
+
 class BuyStockError(graphene.Enum):
     INVALID = 1
 
@@ -92,18 +116,21 @@ class BuyStockError(graphene.Enum):
 class BuyStock(relay.ClientIDMutation):
     class Input:
         strategy_id = graphene.ID()
+        symbol = graphene.String()
         account_id = graphene.String()
 
-    account = graphene.Field(AccounNode)
+    account = graphene.Field(AccountNode)
 
     error = graphene.Field(AuthorizeConnectionError)
     error_message = graphene.String()
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, request_token, oauth_verifier):
+        pass
 
 
 class Mutation(graphene.ObjectType):
     connect_provider = ConnectProvider.Field()
     authorize_connection = AuthorizeConnection.Field()
+    sync_accounts = SyncAccounts.Field()
     buy_stock = BuyStock.Field()

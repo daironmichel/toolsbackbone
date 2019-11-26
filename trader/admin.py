@@ -1,12 +1,12 @@
 from django.contrib import admin
 
-from trader.models import Account, Broker, RiskStrategy, ServiceProvider
+from trader.models import Account, Broker, ServiceProvider, TradingStrategy
 
 # Register your models here.
 
 
-@admin.register(RiskStrategy)
-class RiskStrategyAdmin(admin.ModelAdmin):
+@admin.register(TradingStrategy)
+class TradingStrategyAdmin(admin.ModelAdmin):
     list_display = ('user', 'name', 'exposure_percent',
                     'profit_percent', 'loss_percent', 'fee_per_trade', )
 

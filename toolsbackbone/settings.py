@@ -129,6 +129,14 @@ USE_L10N = True
 
 USE_TZ = True
 
+# teart naive datetime warnings as errors during development
+if DEBUG:
+    import warnings
+    warnings.filterwarnings(
+        'error', r"DateTimeField .* received a naive datetime",
+        RuntimeWarning, r'django\.db\.models\.fields',
+    )
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
@@ -157,7 +165,6 @@ LOGGING = {
         }
     },
 }
-
 
 # ---------------------------------------------------------
 #

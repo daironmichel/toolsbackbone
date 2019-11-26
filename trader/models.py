@@ -1,4 +1,7 @@
 # pylint: disable=no-member
+import datetime
+
+import pytz
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -41,14 +44,22 @@ class Account(models.Model):
         (MARGIN, 'MARGIN')
     ]
 
+    ACTIVE = 'ACTIVE'
+    CLOSED = 'CLOSED'
+    ACCOUNT_STATUS = [
+        (ACTIVE, 'ACTIVE'),
+        (CLOSED, 'CLOSED')
+    ]
+
     name = models.CharField(max_length=250)
     description = models.CharField(max_length=250)
     account_id = models.CharField(max_length=250)
     account_key = models.CharField(max_length=250)
-    account_type = models.CharField(max_length=250)
-    account_mode = models.CharField(max_length=250, choices=ACCOUNT_MODES)
-    pdt_status = models.CharField(max_length=250)
-    number = models.IntegerField()
+    account_type = models.CharField(max_length=50)
+    institution_type = models.CharField(max_length=50)
+    account_mode = models.CharField(max_length=25, choices=ACCOUNT_MODES)
+    account_status = models.CharField(max_length=25, choices=ACCOUNT_STATUS)
+    pdt_status = models.CharField(max_length=50)
     cash_balance = models.DecimalField(max_digits=12, decimal_places=2)
     cash_buying_power = models.DecimalField(max_digits=12, decimal_places=2)
     margin_buying_power = models.DecimalField(max_digits=12, decimal_places=2)
@@ -103,16 +114,49 @@ class Order(models.Model):
         (SELL_SHORT, SELL_SHORT)
     ]
 
+    REGULAR = 'REGULAR'
+    EXTENDED = 'EXTENDED'
+    MARKET_SESSIONS = [
+        (REGULAR, 'REGULAR'),
+        (EXTENDED, 'EXTENDED')
+    ]
+
     symbol = models.CharField(max_length=6)
     quantity = models.IntegerField()
     preview_ids = models.CharField(max_length=250)
     order_id = models.CharField(max_length=250)
-    status = models.CharField(max_length=50, choices=ORDER_STATUS)
-    action = models.CharField(max_length=50, choices=ORDER_ACTIONS)
+    status = models.CharField(max_length=25, choices=ORDER_STATUS)
+    action = models.CharField(max_length=25, choices=ORDER_ACTIONS)
+    market_session = models.CharField(max_length=25, choices=MARKET_SESSIONS)
     account = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name='orders')
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='orders')
+
+    @staticmethod
+    def get_current_market_session():
+        ny_tz = pytz.timezone("America/New_York")
+        now = datetime.datetime.now(ny_tz)
+
+        if now.weekday >= 5:
+            return None  # no session on weekends
+
+        premarket_start = datetime.datetime(
+            now.year, now.month, now.day, 4, tzinfo=ny_tz)
+        market_open = datetime.datetime(
+            now.year, now.month, now.day, 9, 30, tzinfo=ny_tz)
+        market_close = datetime.datetime(
+            now.year, now.month, now.day, 16, tzinfo=ny_tz)
+        afterhours_end = datetime.datetime(
+            now.year, now.month, now.day, 20, tzinfo=ny_tz)
+
+        if now < premarket_start or now > afterhours_end:
+            return None
+
+        if market_open <= now <= market_close:
+            return Order.REGULAR
+
+        return Order.EXTENDED
 
     def __str__(self):
         return f'<Order: {self.id}, {self.action} {self.quantity} {self.symbol}>'
