@@ -158,7 +158,12 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
-        'api': {
+        'trader.api': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'trader.providers': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': True,

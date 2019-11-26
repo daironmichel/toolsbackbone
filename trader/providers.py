@@ -1,9 +1,16 @@
 
 import json
+import logging
 
 from rauth import OAuth1Service
 
 from .models import Account, ProviderSession, ServiceProvider
+
+_logger = logging.getLogger("trader.providers")
+
+
+class ServiceError(Exception):
+    pass
 
 
 class Etrade:
@@ -156,7 +163,7 @@ class Etrade:
             ]
         }
 
-    def preview_order(self, order_client_id, market_session, action, symbol, quantity, limit_price, account_key):
+    def preview_order(self, account_key, order_client_id, market_session, action, symbol, quantity, limit_price):
         headers = {"Content-Type": "application/json",
                    "consumerKey": self.config.consumer_key}
 
@@ -202,6 +209,10 @@ class Etrade:
 
         data = response.json()
 
+        if response.status_code != 200:
+            _logger.error('Preview Order Failed.', extra=data)
+            raise ServiceError('Preview Order Failed.')
+
         if not data:
             return None
 
@@ -211,7 +222,7 @@ class Etrade:
 
         return preview_ids
 
-    def place_order(self, preview_ids, order_client_id, market_session, action, symbol, quantity, limit_price, account_key):
+    def place_order(self, account_key, preview_ids, order_client_id, market_session, action, symbol, quantity, limit_price):
         headers = {"Content-Type": "application/json",
                    "consumerKey": self.config.consumer_key}
 
@@ -235,6 +246,10 @@ class Etrade:
 
         data = response.json()
 
+        if response.status_code != 200:
+            _logger.error('Place Order Failed.', extra=data)
+            raise ServiceError('Place Order Failed.')
+
         if not data:
             return None
 
@@ -245,8 +260,46 @@ class Etrade:
 
         return order_ids[0].get('orderId')
 
-    def get_order_details(self, order_id):
-        pass
+    def get_order_details(self, account_key, order_id, symbol):
+        params = {"symbol": symbol}
+        headers = {"consumerkey": self.config.consumer_key}
+        response = self.request(
+            f'/v1/accounts/{account_key}/orders.json', params=params, headers=headers)
 
-    def cancel_order(self, order_id):
-        pass
+        data = response.json()
+
+        if response.status_code == 204:
+            return None  # Not Found
+
+        if response.status_code != 200:
+            _logger.error('Order Details Failed.', extra=data)
+            raise ServiceError('Order Details Failed.')
+
+        orders_data = data.get("OrdersResponse", {}).get("Order", [])
+        for order in orders_data:
+            if order["orderId"] == order_id:
+                return order
+
+        return None
+
+    def cancel_order(self, account_key, order_id):
+        headers = {"Content-Type": "application/json",
+                   "consumerKey": self.config.consumer_key}
+
+        payload = {
+            "CancelOrderRequest": {
+                "orderId": order_id
+            }
+        }
+
+        payload = json.dumps(payload)
+        response = self.request(
+            f'/v1/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload)
+
+        data = response.jason()
+
+        if response.status_code != 200:
+            _logger.error('Cancel Order Failed.', extra=data)
+            raise ServiceError('Cancel Order Failed.')
+
+        return True
