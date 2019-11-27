@@ -1,6 +1,7 @@
 import logging
 
 import graphene
+from django.db import transaction
 from graphene import relay
 
 from api.graphql.types import (AccountNode, BrokerNode, ServiceProvider,
@@ -131,18 +132,41 @@ class BuyStock(relay.ClientIDMutation):
         account = Account.objects.get(id=account_id)
         strategy = TradingStrategy.objects.get(id=strategy_id)
         provider = ServiceProvider.objects.get(id=provider_id)
-        order = Order.objects.create()
 
         etrade = Etrade(provider)
+        last_price = etrade.get_price(symbol)
 
-        account_key = account.account_key
-        order_client_id,
-        market_session
-        action,
-        symbol,
-        quantity,
-        limit_price
-        preview_ids
+        with transaction.atomic():
+            order = Order.objects.create(
+                action=Order.BUY,
+                symbol=symbol,
+                quantity=strategy.get_quatity_for(
+                    buying_power=account.cash_buying_power, price_per_share=last_price),
+                market_session=Order.get_current_market_session()
+            )
+
+            preview_ids = etrade.preview_order(
+                account_key=account.account_key,
+                order_client_id=order.id,
+                market_session=order.market_session,
+                action=order.action,
+                symbol=order.symbol,
+                quantity=order.quantity,
+                limit_price=strategy.get_limit_price(order.action, last_price)
+            )
+
+            order_details = etrade.place_order(
+                account_key=account.account_key,
+                preview_ids=preview_ids,
+                order_client_id=order.id,
+                market_session=order.market_session,
+                action=order.action,
+                symbol=order.symbol,
+                quantity=order.quantity,
+                limit_price=strategy.get_limit_price(order.action, last_price)
+            )
+
+            # TODO: save update order preview_ids, order_id, status
 
 
 class Mutation(graphene.ObjectType):

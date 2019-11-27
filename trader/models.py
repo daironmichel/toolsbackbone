@@ -1,5 +1,5 @@
-# pylint: disable=no-member
 import datetime
+import math  # pylint: disable=no-member
 
 import pytz
 from django.contrib.auth.models import User
@@ -13,7 +13,12 @@ class TradingStrategy(models.Model):
     exposure_percent = models.IntegerField()
     profit_percent = models.IntegerField()
     loss_percent = models.IntegerField()
-    fee_per_trade = models.FloatField(default=0)
+    fee_per_trade = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0)
+    price_margin = models.DecimalField(
+        max_digits=5, decimal_places=2, default=2)
+    max_price_margin = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.02)
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='trading_strategies')
 
@@ -23,6 +28,40 @@ class TradingStrategy(models.Model):
 
     def __str__(self):
         return f'<TradingStrategy: {self.id}, "{self.name}">'
+
+    def get_quantity_for(self, buying_power, price_per_share):
+        exposure_amount = math.floor(
+            buying_power * (self.exposure_percent / 100))
+        return math.floor(exposure_amount / price_per_share)
+
+    def get_limit_price(self, action, current_price):
+        buying_actions = (Order.BUY, Order.BUY_TO_COVER)
+        limit_abs_dt = self.price_margin
+        limit_max_dt = self.max_price_margin
+
+        price = current_price
+        digits = 0
+        if price > 1:
+            while price > 0:
+                digits += 1
+                price //= 10
+            limit_rel_dt = limit_abs_dt / math.pow(10, digits - 1)
+        else:
+            while price < 1:
+                digits += 1
+                price *= 10
+            limit_rel_dt = limit_abs_dt / math.pow(10, digits + 2)
+
+        limit_rel_dt = round(limit_rel_dt, digits + 2)
+        if limit_rel_dt > limit_max_dt:
+            limit_rel_dt = limit_max_dt
+
+        if action in buying_actions:
+            limit_price = current_price + limit_rel_dt
+        else:
+            limit_price = current_price - limit_rel_dt
+
+        return round(limit_price, digits + 2)
 
 
 class Broker(models.Model):
@@ -123,12 +162,11 @@ class Order(models.Model):
 
     symbol = models.CharField(max_length=6)
     quantity = models.IntegerField()
-    preview_ids = models.CharField(max_length=250)
-    order_id = models.CharField(max_length=250)
-    status = models.CharField(max_length=25, choices=ORDER_STATUS)
     action = models.CharField(max_length=25, choices=ORDER_ACTIONS)
-    market_session = models.CharField(
-        max_length=25, choices=MARKET_SESSIONS, default=Order.get_current_market_session())
+    market_session = models.CharField(max_length=25, choices=MARKET_SESSIONS)
+    order_id = models.CharField(max_length=250, null=True)
+    preview_ids = models.CharField(max_length=250, default='')
+    status = models.CharField(max_length=25, choices=ORDER_STATUS, null=True)
     account = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name='orders')
     user = models.ForeignKey(
