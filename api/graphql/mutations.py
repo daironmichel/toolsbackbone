@@ -3,12 +3,13 @@ import logging
 import graphene
 from graphene import relay
 
-from api.graphql.types import AccountNode, BrokerNode, ServiceProviderNode
-from trader.models import ProviderSession
+from api.graphql.types import (AccountNode, BrokerNode, ServiceProvider,
+                               ServiceProviderNode)
+from trader.models import Account, Order, ProviderSession, TradingStrategy
 from trader.providers import Etrade
 
 # pylint: disable=invalid-name
-logger = logging.getLogger("api")
+logger = logging.getLogger("trader.api")
 
 
 class ConnectProviderError(graphene.Enum):
@@ -115,9 +116,10 @@ class BuyStockError(graphene.Enum):
 
 class BuyStock(relay.ClientIDMutation):
     class Input:
-        strategy_id = graphene.ID()
         symbol = graphene.String()
-        account_id = graphene.String()
+        strategy_id = graphene.ID()
+        account_id = graphene.ID()
+        provider_id = graphene.ID()
 
     account = graphene.Field(AccountNode)
 
@@ -125,8 +127,22 @@ class BuyStock(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, request_token, oauth_verifier):
-        pass
+    def mutate_and_get_payload(cls, root, info, symbol, strategy_id, account_id, provider_id):
+        account = Account.objects.get(id=account_id)
+        strategy = TradingStrategy.objects.get(id=strategy_id)
+        provider = ServiceProvider.objects.get(id=provider_id)
+        order = Order.objects.create()
+
+        etrade = Etrade(provider)
+
+        account_key = account.account_key
+        order_client_id,
+        market_session
+        action,
+        symbol,
+        quantity,
+        limit_price
+        preview_ids
 
 
 class Mutation(graphene.ObjectType):

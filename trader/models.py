@@ -127,7 +127,8 @@ class Order(models.Model):
     order_id = models.CharField(max_length=250)
     status = models.CharField(max_length=25, choices=ORDER_STATUS)
     action = models.CharField(max_length=25, choices=ORDER_ACTIONS)
-    market_session = models.CharField(max_length=25, choices=MARKET_SESSIONS)
+    market_session = models.CharField(
+        max_length=25, choices=MARKET_SESSIONS, default=Order.get_current_market_session())
     account = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name='orders')
     user = models.ForeignKey(

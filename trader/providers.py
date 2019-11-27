@@ -6,7 +6,8 @@ from rauth import OAuth1Service
 
 from .models import Account, ProviderSession, ServiceProvider
 
-_logger = logging.getLogger("trader.providers")
+# pylint: disable=invalid-name
+logger = logging.getLogger("trader.providers")
 
 
 class ServiceError(Exception):
@@ -93,7 +94,7 @@ class Etrade:
             "realTimeNAV": "true"
         }
         response = self.request(f'/v1/accounts/{account_key}/balance.json',
-                                params, headers)
+                                params=params, headers=headers)
 
         data = response.json()
 
@@ -140,6 +141,10 @@ class Etrade:
         if not quotes:
             return None
         return quotes[0]
+
+    def get_price(self, symbol):
+        quote = self.get_quote(symbol)
+        return quote.get("All").get("lastTrade")
 
     @staticmethod
     def build_order_dict(market_session, action, symbol, limit_price, quantity):
@@ -210,7 +215,7 @@ class Etrade:
         data = response.json()
 
         if response.status_code != 200:
-            _logger.error('Preview Order Failed.', extra=data)
+            logger.error('Preview Order Failed.', extra=data)
             raise ServiceError('Preview Order Failed.')
 
         if not data:
@@ -222,7 +227,8 @@ class Etrade:
 
         return preview_ids
 
-    def place_order(self, account_key, preview_ids, order_client_id, market_session, action, symbol, quantity, limit_price):
+    def place_order(self, account_key, preview_ids, order_client_id, market_session,
+                    action, symbol, quantity, limit_price):
         headers = {"Content-Type": "application/json",
                    "consumerKey": self.config.consumer_key}
 
@@ -247,7 +253,7 @@ class Etrade:
         data = response.json()
 
         if response.status_code != 200:
-            _logger.error('Place Order Failed.', extra=data)
+            logger.error('Place Order Failed.', extra=data)
             raise ServiceError('Place Order Failed.')
 
         if not data:
@@ -272,7 +278,7 @@ class Etrade:
             return None  # Not Found
 
         if response.status_code != 200:
-            _logger.error('Order Details Failed.', extra=data)
+            logger.error('Order Details Failed.', extra=data)
             raise ServiceError('Order Details Failed.')
 
         orders_data = data.get("OrdersResponse", {}).get("Order", [])
@@ -299,7 +305,7 @@ class Etrade:
         data = response.jason()
 
         if response.status_code != 200:
-            _logger.error('Cancel Order Failed.', extra=data)
+            logger.error('Cancel Order Failed.', extra=data)
             raise ServiceError('Cancel Order Failed.')
 
         return True
