@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_auth',
     'graphene_django',
+    'django_celery_results',
     'api',
     'trader'
 ]
@@ -218,6 +219,19 @@ ACCOUNT_LOGOUT_ON_GET = True
 GRAPHENE = {
     'SCHEMA': 'api.graphql.schema.schema'
 }
+
+
+# ---------------------------
+# Celery Settings
+# ---------------------------
+
+CELERY_BROKER_URL = os.environ.get('CLOUDAMQP_URL')
+CELERY_RESULT_BACKEND = os.environ.get(
+    'DJANGO_CELERY_RESULT_BACKEND', 'django-db')
+CELERY_BROKER_POOL_LIMIT = int(os.environ.get(
+    'DJANGO_CELERY_BROKER_POOL_LIMIT', 1))
+CELERY_TASK_ALWAYS_EAGER = strtobool(os.environ.get(
+    'DJANGO_CELERY_TASK_ALWAYS_EAGER', 'false'))
 
 
 # ---------------------------

@@ -142,7 +142,9 @@ class BuyStock(relay.ClientIDMutation):
                 symbol=symbol,
                 quantity=strategy.get_quatity_for(
                     buying_power=account.cash_buying_power, price_per_share=last_price),
-                market_session=Order.get_current_market_session()
+                market_session=Order.get_current_market_session(),
+                account=account,
+                user=info.context.user
             )
 
             preview_ids = etrade.preview_order(
@@ -155,7 +157,7 @@ class BuyStock(relay.ClientIDMutation):
                 limit_price=strategy.get_limit_price(order.action, last_price)
             )
 
-            order_details = etrade.place_order(
+            order_id = etrade.place_order(
                 account_key=account.account_key,
                 preview_ids=preview_ids,
                 order_client_id=order.id,
@@ -166,7 +168,12 @@ class BuyStock(relay.ClientIDMutation):
                 limit_price=strategy.get_limit_price(order.action, last_price)
             )
 
-            # TODO: save update order preview_ids, order_id, status
+            order.order_id = order_id
+            order.status = Order.OPEN
+            order.preview_ids = ','.join((str(pid) for pid in preview_ids))
+            order.save()
+
+            # TODO: fire task to watch for order execution
 
 
 class Mutation(graphene.ObjectType):

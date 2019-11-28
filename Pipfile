@@ -15,6 +15,9 @@ djangorestframework = "*"
 graphene-django = "*"
 django-rest-auth = "*"
 rauth = "*"
+redis = "*"
+celery = "*"
+django-celery-results = "*"
 
 [requires]
 python_version = "3.7"
