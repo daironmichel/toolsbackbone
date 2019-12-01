@@ -2,13 +2,14 @@ import logging
 import uuid
 
 import graphene
-from django.db import transaction
 from graphene import relay
 
 from api.graphql.types import (AccountNode, BrokerNode, ServiceProvider,
                                ServiceProviderNode)
-from trader.models import Account, Order, ProviderSession, TradingStrategy
-from trader.providers import Etrade, MarketSession, OrderAction
+from trader.enums import MarketSession, OrderAction
+from trader.models import Account, ProviderSession, TradingStrategy
+from trader.providers import Etrade
+from trader.utils import get_limit_price
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.api")
@@ -148,7 +149,8 @@ class BuyStock(relay.ClientIDMutation):
             'symbol': symbol,
             'quantity': strategy.get_quatity_for(
                 buying_power=account.cash_buying_power, price_per_share=last_price),
-            'limit_price': strategy.get_limit_price(OrderAction.BUY, last_price)
+            'limit_price': get_limit_price(OrderAction.BUY, last_price,
+                                           strategy.price_margin, strategy.max_price_margin)
         }
 
         preview_ids = etrade.preview_order(**order_params)
@@ -192,7 +194,7 @@ class SellStock(relay.ClientIDMutation):
             'action': OrderAction.SELL,
             'symbol': symbol,
             'quantity': position_quantity,
-            'limit_price': strategy.get_limit_price(OrderAction.SELL, last_price)
+            'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=2, max_margin=0.02)
         }
 
         preview_ids = etrade.preview_order(**order_params)

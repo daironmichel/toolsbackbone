@@ -2,8 +2,8 @@ import graphene
 from graphene import relay
 from graphene_django.types import DjangoObjectType
 
-from trader.models import (Account, Broker, Order, Position, ProviderSession,
-                           ServiceProvider, TradingStrategy)
+from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
+                           TradingStrategy)
 from trader.providers import Etrade
 
 
@@ -113,26 +113,37 @@ class AccountNode(DjangoObjectType):
         return Account.objects.get(id=id)
 
 
-class PositionNode(DjangoObjectType):
-    class Meta:
-        model = Position
-        interfaces = (relay.Node, DatabaseId)
-
-    @classmethod
-    # pylint: disable=redefined-builtin
-    def get_node(cls, info, id):
-        return Position.objects.get(id=id)
+class PositionType(graphene.ObjectType):
+    pass
 
 
-class OrderNode(DjangoObjectType):
-    class Meta:
-        model = Order
-        interfaces = (relay.Node, DatabaseId)
+class OrderType(graphene.ObjectType):
+    order_id = graphene.ID()
+    symbol = graphene.String()
+    quantity = graphene.Int()
+    limit_price = graphene.Float()
+    status = graphene.String()
 
-    @classmethod
-    # pylint: disable=redefined-builtin
-    def get_node(cls, info, id):
-        return Order.objects.get(id=id)
+    def resolve_order_id(self, info, **kwargs):
+        return self.get("orderId")
+
+    def resolve_symbol(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        instrument = details.get("Instrument")[0]
+        return instrument.get("Product").get("symbol")
+
+    def resolve_quantity(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        instrument = details.get("Instrument")[0]
+        return instrument.get("quantity")
+
+    def resolve_limit_price(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        return details.get("limitPrice")
+
+    def resolve_status(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        return details.get("status")
 
 
 class ViewerCredentialsType(graphene.ObjectType):
@@ -152,8 +163,9 @@ class ViewerType(graphene.ObjectType):
     trading_strategies = graphene.List(TradingStrategyNode)
     brokers = graphene.List(BrokerNode)
     accounts = graphene.List(AccountNode)
-    positions = graphene.List(PositionNode)
-    orders = graphene.List(OrderNode)
+    # positions = graphene.List(PositionType)
+    orders = graphene.List(
+        OrderType, provider_id=graphene.ID(), account_id=graphene.ID())
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
@@ -170,8 +182,12 @@ class ViewerType(graphene.ObjectType):
     def resolve_prositions(self, info, **kwargs):
         return info.context.user.positions.all()
 
-    def resolve_orders(self, info, **kwargs):
-        return info.context.user.orders.all()
+    def resolve_orders(self, info, provider_id, account_id, **kwargs):
+        provider = info.context.user.providers.get(id=provider_id)
+        account = info.context.user.get(id=account_id)
+
+        etrade = Etrade(provider)
+        return etrade.get_orders(account.account_key)
 
 
 class Query(graphene.ObjectType):

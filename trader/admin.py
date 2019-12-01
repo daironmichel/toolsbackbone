@@ -18,8 +18,8 @@ class BrokerAdmin(admin.ModelAdmin):
 
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ('user', 'name', 'number',
-                    'purchasing_power', 'last_updated')
+    list_display = ('user', 'name', 'cash_buying_power',
+                    'margin_buying_power', 'last_updated')
 
 
 @admin.register(ServiceProvider)

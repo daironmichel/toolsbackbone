@@ -1,7 +1,5 @@
-import datetime
 import math  # pylint: disable=no-member
 
-import pytz
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -33,35 +31,6 @@ class TradingStrategy(models.Model):
         exposure_amount = math.floor(
             buying_power * (self.exposure_percent / 100))
         return math.floor(exposure_amount / price_per_share)
-
-    def get_limit_price(self, action, current_price):
-        buying_actions = (Order.BUY, Order.BUY_TO_COVER)
-        limit_abs_dt = self.price_margin
-        limit_max_dt = self.max_price_margin
-
-        price = current_price
-        digits = 0
-        if price > 1:
-            while price > 0:
-                digits += 1
-                price //= 10
-            limit_rel_dt = limit_abs_dt / math.pow(10, digits - 1)
-        else:
-            while price < 1:
-                digits += 1
-                price *= 10
-            limit_rel_dt = limit_abs_dt / math.pow(10, digits + 2)
-
-        limit_rel_dt = round(limit_rel_dt, digits + 2)
-        if limit_rel_dt > limit_max_dt:
-            limit_rel_dt = limit_max_dt
-
-        if action in buying_actions:
-            limit_price = current_price + limit_rel_dt
-        else:
-            limit_price = current_price - limit_rel_dt
-
-        return round(limit_price, digits + 2)
 
 
 class Broker(models.Model):
