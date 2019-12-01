@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 import graphene
 from django.db import transaction
@@ -7,7 +8,7 @@ from graphene import relay
 from api.graphql.types import (AccountNode, BrokerNode, ServiceProvider,
                                ServiceProviderNode)
 from trader.models import Account, Order, ProviderSession, TradingStrategy
-from trader.providers import Etrade
+from trader.providers import Etrade, MarketSession, OrderAction
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.api")
@@ -124,56 +125,110 @@ class BuyStock(relay.ClientIDMutation):
 
     account = graphene.Field(AccountNode)
 
-    error = graphene.Field(AuthorizeConnectionError)
+    error = graphene.Field(BuyStockError)
     error_message = graphene.String()
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id, account_id, provider_id):
         account = Account.objects.get(id=account_id)
         strategy = TradingStrategy.objects.get(id=strategy_id)
-        provider = ServiceProvider.objects.get(id=provider_id)
+        provider = ServiceProvider.objects.get(id=provider_id) \
+            .select_related('session')
+
+        order_client_id = uuid.uuid4()
 
         etrade = Etrade(provider)
         last_price = etrade.get_price(symbol)
 
-        with transaction.atomic():
-            order = Order.objects.create(
-                action=Order.BUY,
-                symbol=symbol,
-                quantity=strategy.get_quatity_for(
-                    buying_power=account.cash_buying_power, price_per_share=last_price),
-                market_session=Order.get_current_market_session(),
-                account=account,
-                user=info.context.user
-            )
+        order_params = {
+            'account_key': account.account_key,
+            'order_client_id': order_client_id,
+            'market_session': MarketSession.current(),
+            'action': OrderAction.BUY,
+            'symbol': symbol,
+            'quantity': strategy.get_quatity_for(
+                buying_power=account.cash_buying_power, price_per_share=last_price),
+            'limit_price': strategy.get_limit_price(OrderAction.BUY, last_price)
+        }
 
-            preview_ids = etrade.preview_order(
-                account_key=account.account_key,
-                order_client_id=order.id,
-                market_session=order.market_session,
-                action=order.action,
-                symbol=order.symbol,
-                quantity=order.quantity,
-                limit_price=strategy.get_limit_price(order.action, last_price)
-            )
+        preview_ids = etrade.preview_order(**order_params)
+        etrade.place_order(preview_ids=preview_ids, **order_params)
 
-            order_id = etrade.place_order(
-                account_key=account.account_key,
-                preview_ids=preview_ids,
-                order_client_id=order.id,
-                market_session=order.market_session,
-                action=order.action,
-                symbol=order.symbol,
-                quantity=order.quantity,
-                limit_price=strategy.get_limit_price(order.action, last_price)
-            )
+        return BuyStock(account=account)
 
-            order.order_id = order_id
-            order.status = Order.OPEN
-            order.preview_ids = ','.join((str(pid) for pid in preview_ids))
-            order.save()
 
-            # TODO: fire task to watch for order execution
+class SellStockError(graphene.Enum):
+    INVALID = 1
+
+
+class SellStock(relay.ClientIDMutation):
+    class Input:
+        symbol = graphene.String()
+        account_id = graphene.ID()
+        provider_id = graphene.ID()
+
+    account = graphene.Field(AccountNode)
+
+    error = graphene.Field(SellStockError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, symbol, account_id, provider_id):
+        account = Account.objects.get(id=account_id)
+        provider = ServiceProvider.objects.get(id=provider_id) \
+            .select_related('session')
+
+        order_client_id = uuid.uuid4()
+
+        etrade = Etrade(provider)
+        position_quantity = etrade.get_position_quantity(
+            account.account_key, symbol)
+        last_price = etrade.get_price(symbol)
+
+        order_params = {
+            'account_key': account.account_key,
+            'order_client_id': order_client_id,
+            'market_session': MarketSession.current(),
+            'action': OrderAction.SELL,
+            'symbol': symbol,
+            'quantity': position_quantity,
+            'limit_price': strategy.get_limit_price(OrderAction.SELL, last_price)
+        }
+
+        preview_ids = etrade.preview_order(**order_params)
+        etrade.place_order(preview_ids=preview_ids, **order_params)
+
+        return SellStock(account=account)
+
+
+class CancelOrderError(graphene.Enum):
+    INVALID = 1
+
+
+class CancelOrder(relay.ClientIDMutation):
+    class Input:
+        account_id = graphene.ID()
+        order_id = graphene.ID()
+        provider_id = graphene.ID()
+
+    account = graphene.Field(AccountNode)
+
+    error = graphene.Field(CancelOrderError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, account_id, order_id, provider_id):
+        account = Account.objects.get(id=account_id)
+        provider = ServiceProvider.objects.get(id=provider_id) \
+            .select_related('session')
+
+        etrade = Etrade(provider)
+        etrade.cancel_order(
+            account_key=account.account_key,
+            order_id=order_id
+        )
+
+        return CancelOrder(account=account)
 
 
 class Mutation(graphene.ObjectType):
@@ -181,3 +236,4 @@ class Mutation(graphene.ObjectType):
     authorize_connection = AuthorizeConnection.Field()
     sync_accounts = SyncAccounts.Field()
     buy_stock = BuyStock.Field()
+    cancel_order = CancelOrder.Field()
