@@ -70,7 +70,7 @@ class ServiceProviderNode(DjangoObjectType):
     @classmethod
     # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
-        return ServiceProvider.objects.get(id=id)
+        return info.context.user.service_providers.get(id=id)
 
     def resolve_quote(self, info, symbol):
         etrade = Etrade(self)
@@ -99,7 +99,7 @@ class BrokerNode(DjangoObjectType):
     @classmethod
     # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
-        return Broker.objects.get(id=id)
+        return info.context.user.brokers.get(id=id)
 
 
 class AccountNode(DjangoObjectType):
