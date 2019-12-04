@@ -61,9 +61,10 @@ class QuoteType(graphene.ObjectType):
 class ServiceProviderNode(DjangoObjectType):
     session = graphene.Field(ProviderSessionNode)
     quote = graphene.Field(QuoteType, symbol=graphene.String())
+    broker = graphene.Field(lambda: BrokerNode)
 
     class Meta:
-        exclude_fields = ('user', 'broker')
+        exclude_fields = ('user',)
         model = ServiceProvider
         interfaces = (relay.Node, DatabaseId)
 
@@ -91,6 +92,9 @@ class ServiceProviderNode(DjangoObjectType):
 
 
 class BrokerNode(DjangoObjectType):
+    service_provider = graphene.Field(
+        ServiceProviderNode, database_id=graphene.ID(), slug=graphene.String())
+
     class Meta:
         exclude_fields = ('user',)
         model = Broker
@@ -100,6 +104,15 @@ class BrokerNode(DjangoObjectType):
     # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return info.context.user.brokers.get(id=id)
+
+    def resolve_service_provider(self, info, **kwargs):
+        database_id = kwargs.get('database_id', None)
+        slug = kwargs.get('slug', None)
+        if database_id:
+            return self.service_providers.get(id=database_id)
+        if slug:
+            return self.service_providers.get(slug=slug)
+        return None
 
 
 class AccountNode(DjangoObjectType):
@@ -158,15 +171,20 @@ class ViewerCredentialsType(graphene.ObjectType):
         return f'{user.first_name} {user.last_name}'.strip() or user.username
 
 
+class ServiceProviderSlugInput(graphene.InputObjectType):
+    broker_slug = graphene.String(required=True)
+    priverder_slug = graphene.String(required=True)
+
+
 class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType)
     trading_strategies = graphene.List(TradingStrategyNode)
     brokers = graphene.List(BrokerNode)
     broker = graphene.Field(
-        BrokerNode, slug=graphene.String(), database_id=graphene.ID())
+        BrokerNode, database_id=graphene.ID(), slug=graphene.String())
     service_providers = graphene.List(ServiceProviderNode)
     service_provider = graphene.Field(
-        ServiceProviderNode, slug=graphene.String(), database_id=graphene.ID())
+        ServiceProviderNode, database_id=graphene.ID(), slug=ServiceProviderSlugInput())
     accounts = graphene.List(AccountNode)
     # positions = graphene.List(PositionType)
     orders = graphene.List(
@@ -181,7 +199,9 @@ class ViewerType(graphene.ObjectType):
     def resolve_brokers(self, info, **kwargs):
         return info.context.user.brokers.all()
 
-    def resolve_broker(self, info, slug, database_id, **kwargs):
+    def resolve_broker(self, info, **kwargs):
+        database_id = kwargs.get('database_id', None)
+        slug = kwargs.get('slug', None)
         if database_id:
             return info.context.user.brokers.get(id=database_id)
         if slug:
@@ -191,11 +211,16 @@ class ViewerType(graphene.ObjectType):
     def resolve_service_providers(self, info, **kwargs):
         return info.context.user.service_providers.all()
 
-    def resolve_service_provider(self, info, slug, database_id, **kwargs):
+    def resolve_service_provider(self, info, **kwargs):
+        database_id = kwargs.get('database_id', None)
+        slug = kwargs.get('slug', None)
         if database_id:
             return info.context.user.service_providers.get(id=database_id)
         if slug:
-            return info.context.user.service_providers.get(slug=slug)
+            broker_slug = slug.get('broker_slug')
+            provider_slug = slug.get('provider_slug')
+            broker = info.context.user.brokers.get(slug=broker_slug)
+            return broker.service_providers.get(slug=provider_slug)
         return None
 
     def resolve_accounts(self, info, **kwargs):

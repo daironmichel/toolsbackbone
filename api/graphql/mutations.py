@@ -55,7 +55,7 @@ class AuthorizeConnectionError(graphene.Enum):
 class AuthorizeConnection(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID()
-        aouth_verifier = graphene.String()
+        oauth_verifier = graphene.String()
 
     service_provider = graphene.Field(ServiceProviderNode)
 
