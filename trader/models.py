@@ -2,6 +2,7 @@ import math  # pylint: disable=no-member
 
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils.text import slugify
 
 # Create your models here.
 
@@ -35,13 +36,22 @@ class TradingStrategy(models.Model):
 
 class Broker(models.Model):
     name = models.CharField(max_length=250)
+    slug = models.SlugField(max_length=250)
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='brokers')
+
+    class Meta:
+        unique_together = ("user", "slug")
 
     def __str__(self):
         # Disable pylint warn about self.user_id not being a member
         # pylint: disable=no-member
         return f'<Broker: {self.id}, "{self.name}">'
+
+    def save(self, force_insert=False, force_update=False, using=None,
+             update_fields=None):
+        self.slug = slugify(self.name)
+        super().save(force_insert, force_update, using, update_fields)
 
 
 class Account(models.Model):
@@ -114,6 +124,7 @@ class ServiceProvider(models.Model):
     ]
 
     name = models.CharField(max_length=250)
+    slug = models.SlugField(max_length=250)
     protocol = models.CharField(
         max_length=10, choices=PROTOCOLS, default=OAUTH1)
     consumer_key = models.CharField(max_length=250)
@@ -131,5 +142,13 @@ class ServiceProvider(models.Model):
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='service_providers')
 
+    class Meta:
+        unique_together = ("broker", "slug")
+
     def __str__(self):
         return f'<ServiceProvider: {self.id}, "{self.name}">'
+
+    def save(self, force_insert=False, force_update=False, using=None,
+             update_fields=None):
+        self.slug = slugify(self.name)
+        super().save(force_insert, force_update, using, update_fields)

@@ -162,6 +162,11 @@ class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType)
     trading_strategies = graphene.List(TradingStrategyNode)
     brokers = graphene.List(BrokerNode)
+    broker = graphene.Field(
+        BrokerNode, slug=graphene.String(), database_id=graphene.ID())
+    service_providers = graphene.List(ServiceProviderNode)
+    service_provider = graphene.Field(
+        ServiceProviderNode, slug=graphene.String(), database_id=graphene.ID())
     accounts = graphene.List(AccountNode)
     # positions = graphene.List(PositionType)
     orders = graphene.List(
@@ -175,6 +180,23 @@ class ViewerType(graphene.ObjectType):
 
     def resolve_brokers(self, info, **kwargs):
         return info.context.user.brokers.all()
+
+    def resolve_broker(self, info, slug, database_id, **kwargs):
+        if database_id:
+            return info.context.user.brokers.get(id=database_id)
+        if slug:
+            return info.context.user.brokers.get(slug=slug)
+        return None
+
+    def resolve_service_providers(self, info, **kwargs):
+        return info.context.user.service_providers.all()
+
+    def resolve_service_provider(self, info, slug, database_id, **kwargs):
+        if database_id:
+            return info.context.user.service_providers.get(id=database_id)
+        if slug:
+            return info.context.user.service_providers.get(slug=slug)
+        return None
 
     def resolve_accounts(self, info, **kwargs):
         return info.context.user.accounts.all()
