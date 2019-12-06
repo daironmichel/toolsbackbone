@@ -8,7 +8,7 @@ from trader.providers import Etrade
 
 
 class DatabaseId(graphene.Interface):
-    database_id = graphene.Int()
+    database_id = graphene.Int(required=True)
 
     def resolve_database_id(self, info, **kwargs):
         return getattr(self, 'id')
@@ -61,7 +61,7 @@ class QuoteType(graphene.ObjectType):
 class ServiceProviderNode(DjangoObjectType):
     session = graphene.Field(ProviderSessionNode)
     quote = graphene.Field(QuoteType, symbol=graphene.String())
-    broker = graphene.Field(lambda: BrokerNode)
+    broker = graphene.Field(lambda: BrokerNode, required=True)
 
     class Meta:
         exclude_fields = ('user',)
@@ -91,7 +91,13 @@ class ServiceProviderNode(DjangoObjectType):
         )
 
 
+class ServiceProviderNodeConnection(relay.Connection):
+    class Meta:
+        node = graphene.NonNull(ServiceProviderNode)
+
+
 class BrokerNode(DjangoObjectType):
+    service_providers = relay.ConnectionField(ServiceProviderNodeConnection)
     service_provider = graphene.Field(
         ServiceProviderNode, database_id=graphene.ID(), slug=graphene.String())
 
@@ -160,8 +166,8 @@ class OrderType(graphene.ObjectType):
 
 
 class ViewerCredentialsType(graphene.ObjectType):
-    database_id = graphene.Int()
-    full_name = graphene.String()
+    database_id = graphene.Int(required=True)
+    full_name = graphene.String(required=True)
 
     def resolve_database_id(self, info, **kwargs):
         return info.context.user.id
@@ -177,9 +183,9 @@ class ServiceProviderSlugInput(graphene.InputObjectType):
 
 
 class ViewerType(graphene.ObjectType):
-    credentials = graphene.Field(ViewerCredentialsType)
-    trading_strategies = graphene.List(TradingStrategyNode)
-    brokers = graphene.List(BrokerNode)
+    credentials = graphene.Field(ViewerCredentialsType, required=True)
+    trading_strategies = graphene.List(graphene.NonNull(TradingStrategyNode))
+    brokers = graphene.List(graphene.NonNull(BrokerNode))
     broker = graphene.Field(
         BrokerNode, database_id=graphene.ID(), slug=graphene.String())
     service_providers = graphene.List(ServiceProviderNode)
@@ -239,7 +245,7 @@ class ViewerType(graphene.ObjectType):
 
 class Query(graphene.ObjectType):
     node = relay.Node.Field()
-    viewer = graphene.Field(ViewerType)
+    viewer = graphene.Field(ViewerType, required=True)
 
     def resolve_viewer(self, info, **kwargs):
         return ViewerType()

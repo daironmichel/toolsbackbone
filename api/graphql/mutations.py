@@ -54,8 +54,8 @@ class AuthorizeConnectionError(graphene.Enum):
 
 class AuthorizeConnection(relay.ClientIDMutation):
     class Input:
-        provider_id = graphene.ID()
-        oauth_verifier = graphene.String()
+        provider_id = graphene.ID(required=True)
+        oauth_verifier = graphene.String(required=True)
 
     service_provider = graphene.Field(ServiceProviderNode)
 
@@ -89,7 +89,7 @@ class SyncAccountsError(graphene.Enum):
 
 class SyncAccounts(relay.ClientIDMutation):
     class Input:
-        provider_id = graphene.ID()
+        provider_id = graphene.ID(required=True)
 
     boker = graphene.Field(BrokerNode)
 
@@ -119,10 +119,10 @@ class BuyStockError(graphene.Enum):
 
 class BuyStock(relay.ClientIDMutation):
     class Input:
-        symbol = graphene.String()
-        strategy_id = graphene.ID()
-        account_id = graphene.ID()
-        provider_id = graphene.ID()
+        provider_id = graphene.ID(required=True)
+        account_id = graphene.ID(required=True)
+        strategy_id = graphene.ID(required=True)
+        symbol = graphene.String(required=True)
 
     account = graphene.Field(AccountNode)
 
@@ -165,9 +165,9 @@ class SellStockError(graphene.Enum):
 
 class SellStock(relay.ClientIDMutation):
     class Input:
-        symbol = graphene.String()
-        account_id = graphene.ID()
-        provider_id = graphene.ID()
+        provider_id = graphene.ID(required=True)
+        account_id = graphene.ID(required=True)
+        symbol = graphene.String(required=True)
 
     account = graphene.Field(AccountNode)
 
@@ -209,9 +209,9 @@ class CancelOrderError(graphene.Enum):
 
 class CancelOrder(relay.ClientIDMutation):
     class Input:
-        account_id = graphene.ID()
-        order_id = graphene.ID()
-        provider_id = graphene.ID()
+        provider_id = graphene.ID(required=True)
+        account_id = graphene.ID(required=True)
+        order_id = graphene.ID(required=True)
 
     account = graphene.Field(AccountNode)
 
@@ -234,8 +234,8 @@ class CancelOrder(relay.ClientIDMutation):
 
 
 class Mutation(graphene.ObjectType):
-    connect_provider = ConnectProvider.Field()
-    authorize_connection = AuthorizeConnection.Field()
-    sync_accounts = SyncAccounts.Field()
-    buy_stock = BuyStock.Field()
-    cancel_order = CancelOrder.Field()
+    connect_provider = ConnectProvider.Field(required=True)
+    authorize_connection = AuthorizeConnection.Field(required=True)
+    sync_accounts = SyncAccounts.Field(required=True)
+    buy_stock = BuyStock.Field(required=True)
+    cancel_order = CancelOrder.Field(required=True)
