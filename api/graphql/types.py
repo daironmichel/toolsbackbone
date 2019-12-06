@@ -6,6 +6,8 @@ from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
                            TradingStrategy)
 from trader.providers import Etrade
 
+from .graphene_overrides import NonNullConnection
+
 
 class DatabaseId(graphene.Interface):
     database_id = graphene.Int(required=True)
@@ -97,7 +99,7 @@ class ServiceProviderNodeConnection(relay.Connection):
 
 
 class BrokerNode(DjangoObjectType):
-    service_providers = relay.ConnectionField(ServiceProviderNodeConnection)
+    service_providers = NonNullConnection(ServiceProviderNodeConnection)
     service_provider = graphene.Field(
         ServiceProviderNode, database_id=graphene.ID(), slug=graphene.String())
 
@@ -119,6 +121,11 @@ class BrokerNode(DjangoObjectType):
         if slug:
             return self.service_providers.get(slug=slug)
         return None
+
+
+class BrokerNodeConnection(relay.Connection):
+    class Meta:
+        node = graphene.NonNull(BrokerNode)
 
 
 class AccountNode(DjangoObjectType):
@@ -185,16 +192,17 @@ class ServiceProviderSlugInput(graphene.InputObjectType):
 class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType, required=True)
     trading_strategies = graphene.List(graphene.NonNull(TradingStrategyNode))
-    brokers = graphene.List(graphene.NonNull(BrokerNode))
+    brokers = graphene.List(graphene.NonNull(BrokerNode), required=True)
     broker = graphene.Field(
         BrokerNode, database_id=graphene.ID(), slug=graphene.String())
-    service_providers = graphene.List(ServiceProviderNode)
+    service_providers = graphene.List(
+        graphene.NonNull(ServiceProviderNode), required=True)
     service_provider = graphene.Field(
         ServiceProviderNode, database_id=graphene.ID(), slug=ServiceProviderSlugInput())
-    accounts = graphene.List(AccountNode)
+    accounts = graphene.List(graphene.NonNull(AccountNode), required=True)
     # positions = graphene.List(PositionType)
     orders = graphene.List(
-        OrderType, provider_id=graphene.ID(), account_id=graphene.ID())
+        graphene.NonNull(OrderType), required=True, provider_id=graphene.ID(), account_id=graphene.ID())
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
