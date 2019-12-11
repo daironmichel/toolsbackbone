@@ -1,4 +1,4 @@
-import math  # pylint: disable=no-member
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.db import models
@@ -9,9 +9,12 @@ from django.utils.text import slugify
 
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
-    exposure_percent = models.IntegerField()
-    profit_percent = models.IntegerField()
-    loss_percent = models.IntegerField()
+    exposure_percent = models.DecimalField(
+        max_digits=3, decimal_places=0, max_length=100)
+    profit_percent = models.DecimalField(
+        max_digits=3, decimal_places=0, max_length=100)
+    loss_percent = models.DecimalField(
+        max_digits=3, decimal_places=0, max_length=100)
     fee_per_trade = models.DecimalField(
         max_digits=5, decimal_places=2, default=0)
     price_margin = models.DecimalField(
@@ -28,10 +31,9 @@ class TradingStrategy(models.Model):
     def __str__(self):
         return f'<TradingStrategy: {self.id}, "{self.name}">'
 
-    def get_quantity_for(self, buying_power, price_per_share):
-        exposure_amount = math.floor(
-            buying_power * (self.exposure_percent / 100))
-        return math.floor(exposure_amount / price_per_share)
+    def get_quantity_for(self, buying_power: Decimal, price_per_share: Decimal) -> Decimal:
+        exposure_amount = buying_power * (self.exposure_percent / Decimal(100))
+        return (exposure_amount / price_per_share).quantize(Decimal('1'))
 
 
 class Broker(models.Model):
@@ -91,30 +93,6 @@ class Account(models.Model):
         return f'<Account: {self.id}, "{self.name}">'
 
 
-class ProviderSession(models.Model):
-    REQUESTING = 0
-    CONNECTED = 1
-    INACTIVE = 2
-    EXPIRED = 3
-    CLOSED = 4
-    SESSION_STATUS = [
-        (REQUESTING, 'Requesting Access'),
-        (CONNECTED, 'Access Granted'),
-        (INACTIVE, 'Access Token Inactive'),
-        (EXPIRED, 'Access Token Expired'),
-        (CLOSED, 'Access Token Revoked')
-    ]
-    status = models.SmallIntegerField(
-        choices=SESSION_STATUS, default=REQUESTING)
-    request_token = models.CharField(max_length=250, null=True)
-    request_token_secret = models.CharField(max_length=250, null=True)
-    access_token = models.CharField(max_length=250, null=True)
-    access_token_secret = models.CharField(max_length=250, null=True)
-
-    def __str__(self):
-        return f'<ProviderSession: {self.id}>'
-
-
 class ServiceProvider(models.Model):
     OAUTH1 = 'OAUTH1'
     OAUTH2 = 'OAUTH2'
@@ -135,8 +113,6 @@ class ServiceProvider(models.Model):
     refresh_url = models.CharField(max_length=250, null=True, blank=True)
     revoke_url = models.CharField(max_length=250, null=True, blank=True)
     base_url = models.CharField(max_length=250, null=True, blank=True)
-    session = models.OneToOneField(
-        ProviderSession, on_delete=models.CASCADE, related_name='provider', null=True, blank=True)
     broker = models.ForeignKey(
         Broker, on_delete=models.CASCADE, related_name='service_providers')
     user = models.ForeignKey(
@@ -152,3 +128,31 @@ class ServiceProvider(models.Model):
              update_fields=None):
         self.slug = slugify(self.name)
         super().save(force_insert, force_update, using, update_fields)
+
+
+class ProviderSession(models.Model):
+    REQUESTING = 0
+    CONNECTED = 1
+    INACTIVE = 2
+    EXPIRED = 3
+    CLOSED = 4
+    SESSION_STATUS = [
+        (REQUESTING, 'Requesting Access'),
+        (CONNECTED, 'Access Granted'),
+        (INACTIVE, 'Access Token Inactive'),
+        (EXPIRED, 'Access Token Expired'),
+        (CLOSED, 'Access Token Revoked')
+    ]
+    status = models.SmallIntegerField(
+        choices=SESSION_STATUS, default=REQUESTING)
+    request_token = models.CharField(max_length=250, null=True)
+    request_token_secret = models.CharField(max_length=250, null=True)
+    access_token = models.CharField(max_length=250, null=True)
+    access_token_secret = models.CharField(max_length=250, null=True)
+    created = models.DateTimeField(auto_now_add=True)
+    refreshed = models.DateTimeField(auto_now=True)
+    provider = models.OneToOneField(
+        ServiceProvider, on_delete=models.CASCADE, related_name='session')
+
+    def __str__(self):
+        return f'<ProviderSession: {self.id}>'

@@ -8,5 +8,5 @@ logger = logging.getLogger("trader.tasks")
 
 @task
 def watch_until_executed(order_id):
-    logger.info("executing task: test(param1=%s, param2=%s)",
-                param1, param2)
+    logger.info("executing task: watch_until_executed(order_id=%s)",
+                order_id)

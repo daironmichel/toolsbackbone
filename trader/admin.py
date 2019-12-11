@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from trader.models import Account, Broker, ServiceProvider, TradingStrategy
+from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
+                           TradingStrategy)
 
 # Register your models here.
 
@@ -25,3 +26,8 @@ class AccountAdmin(admin.ModelAdmin):
 @admin.register(ServiceProvider)
 class ServiceProviderAdmin(admin.ModelAdmin):
     list_display = ('name', 'protocol', 'broker', 'user')
+
+
+@admin.register(ProviderSession)
+class ProviderSessionAdmin(admin.ModelAdmin):
+    list_display = ('status', 'refreshed', 'provider')

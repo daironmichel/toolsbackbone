@@ -14,3 +14,4 @@ staticfiles
 *$py.class
 
 .env
+.mypy_cache

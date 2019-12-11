@@ -20,6 +20,20 @@ class OrderAction(enum.Enum):
     BUY_TO_COVER = 'BUY_TO_COVER'
     SELL_SHORT = 'SELL_SHORT'
 
+    @staticmethod
+    def buying_actions():
+        return (OrderAction.BUY, OrderAction.BUY_TO_COVER)
+
+    @staticmethod
+    def selling_actions():
+        return (OrderAction.SELL, OrderAction.SELL_SHORT)
+
+    def buying(self) -> bool:
+        return self in OrderAction.buying_actions()
+
+    def selling(self) -> bool:
+        return self in OrderAction.selling_actions()
+
 
 class MarketSession(enum.Enum):
     REGULAR = 'REGULAR'
@@ -30,7 +44,7 @@ class MarketSession(enum.Enum):
         ny_tz = pytz.timezone("America/New_York")
         now = datetime.datetime.now(ny_tz)
 
-        if now.weekday >= 5:
+        if now.weekday() >= 5:
             return None  # no session on weekends
 
         premarket_start = datetime.datetime(

@@ -1,7 +1,7 @@
 import logging
-import uuid
 
 import graphene
+from django.utils.crypto import get_random_string
 from graphene import relay
 
 from api.graphql.types import (AccountNode, BrokerNode, ServiceProvider,
@@ -91,7 +91,7 @@ class SyncAccounts(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
 
-    boker = graphene.Field(BrokerNode)
+    broker = graphene.Field(BrokerNode)
 
     error = graphene.Field(AuthorizeConnectionError)
     error_message = graphene.String()
@@ -133,24 +133,26 @@ class BuyStock(relay.ClientIDMutation):
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id, account_id, provider_id):
         account = Account.objects.get(id=account_id)
         strategy = TradingStrategy.objects.get(id=strategy_id)
-        provider = ServiceProvider.objects.get(id=provider_id) \
-            .select_related('session')
+        provider = ServiceProvider.objects.select_related('session') \
+            .get(id=provider_id)
 
-        order_client_id = uuid.uuid4()
+        order_client_id = get_random_string(length=20)
 
         etrade = Etrade(provider)
         last_price = etrade.get_price(symbol)
 
+        limit_price = get_limit_price(OrderAction.BUY, last_price,
+                                      strategy.price_margin, strategy.max_price_margin)
+
         order_params = {
             'account_key': account.account_key,
             'order_client_id': order_client_id,
-            'market_session': MarketSession.current(),
-            'action': OrderAction.BUY,
+            'market_session': MarketSession.current().value,
+            'action': OrderAction.BUY.value,
             'symbol': symbol,
-            'quantity': strategy.get_quatity_for(
+            'quantity': strategy.get_quantity_for(
                 buying_power=account.cash_buying_power, price_per_share=last_price),
-            'limit_price': get_limit_price(OrderAction.BUY, last_price,
-                                           strategy.price_margin, strategy.max_price_margin)
+            'limit_price': limit_price
         }
 
         preview_ids = etrade.preview_order(**order_params)
@@ -180,7 +182,7 @@ class SellStock(relay.ClientIDMutation):
         provider = ServiceProvider.objects.get(id=provider_id) \
             .select_related('session')
 
-        order_client_id = uuid.uuid4()
+        order_client_id = get_random_string(length=20)
 
         etrade = Etrade(provider)
         position_quantity = etrade.get_position_quantity(
@@ -238,4 +240,5 @@ class Mutation(graphene.ObjectType):
     authorize_connection = AuthorizeConnection.Field(required=True)
     sync_accounts = SyncAccounts.Field(required=True)
     buy_stock = BuyStock.Field(required=True)
+    sell_stock = SellStock.Field(required=True)
     cancel_order = CancelOrder.Field(required=True)

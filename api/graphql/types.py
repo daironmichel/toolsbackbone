@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import graphene
 from graphene import relay
 from graphene_django.types import DjangoObjectType
@@ -52,9 +54,9 @@ class ProviderSessionNode(DjangoObjectType):
 
 class QuoteType(graphene.ObjectType):
     volume = graphene.Int()
-    last_trade = graphene.Float()
-    last_trade_direction = graphene.Float()
-    market_cap = graphene.Float()
+    last_trade = graphene.Decimal()
+    last_trade_direction = graphene.Decimal()
+    market_cap = graphene.Decimal()
     shares_outstanding = graphene.Int()
     primary_exchange = graphene.String()
     company_name = graphene.String()
@@ -64,6 +66,7 @@ class ServiceProviderNode(DjangoObjectType):
     session = graphene.Field(ProviderSessionNode)
     quote = graphene.Field(QuoteType, symbol=graphene.String())
     broker = graphene.Field(lambda: BrokerNode, required=True)
+    session_status = graphene.Field(SessionStatus, required=True)
 
     class Meta:
         exclude_fields = ('user',)
@@ -75,6 +78,20 @@ class ServiceProviderNode(DjangoObjectType):
     def get_node(cls, info, id):
         return info.context.user.service_providers.get(id=id)
 
+    def resolve_session_status(self, *args, **kwargs):
+        session = ProviderSession.objects.filter(provider=self).first()
+        if not session:
+            return ProviderSession.CLOSED
+
+        etrade = Etrade(self)
+        if self.session and not etrade.is_session_active():
+            self.session.delete()
+            self.session = None
+            self.save()
+            return ProviderSession.CLOSED
+
+        return self.session.status
+
     def resolve_quote(self, info, symbol):
         etrade = Etrade(self)
         quote_data = etrade.get_quote(symbol)
@@ -84,24 +101,49 @@ class ServiceProviderNode(DjangoObjectType):
 
         return QuoteType(
             volume=quote_data.get('All').get('totalVolume'),
-            last_trade=quote_data.get('All').get('lastTrade'),
-            last_trade_direction=quote_data.get('All').get('dirLast'),
-            market_cap=quote_data.get('All').get('marketCap'),
+            last_trade=Decimal(str(quote_data.get('All').get('lastTrade'))),
+            last_trade_direction=Decimal(
+                str(quote_data.get('All').get('dirLast'))),
+            market_cap=Decimal(str(quote_data.get('All').get('marketCap'))),
             shares_outstanding=quote_data.get('All').get('sharesOutstanding'),
             primary_exchange=quote_data.get('All').get('primaryExchange'),
             company_name=quote_data.get('All').get('companyName'),
         )
 
 
-class ServiceProviderNodeConnection(relay.Connection):
+class ServiceProviderConnection(NonNullConnection):
     class Meta:
-        node = graphene.NonNull(ServiceProviderNode)
+        node = ServiceProviderNode
+
+    # class ServiceProviderEdge(graphene.ObjectType):
+    #     node = graphene.Field(ServiceProviderNode, required=True)
+    #     cursor = graphene.String(required=True)
+
+    # edges = graphene.List(graphene.NonNull(ServiceProviderEdge), required=True)
+
+
+class AccountNode(DjangoObjectType):
+    class Meta:
+        model = Account
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    # pylint: disable=redefined-builtin
+    def get_node(cls, info, id):
+        return Account.objects.get(id=id)
+
+
+class AccountConnection(NonNullConnection):
+    class Meta:
+        node = AccountNode
 
 
 class BrokerNode(DjangoObjectType):
-    service_providers = NonNullConnection(ServiceProviderNodeConnection)
+    service_providers = relay.ConnectionField(
+        ServiceProviderConnection, required=True)
     service_provider = graphene.Field(
         ServiceProviderNode, database_id=graphene.ID(), slug=graphene.String())
+    accounts = relay.ConnectionField(AccountConnection, required=True)
 
     class Meta:
         exclude_fields = ('user',)
@@ -122,21 +164,16 @@ class BrokerNode(DjangoObjectType):
             return self.service_providers.get(slug=slug)
         return None
 
+    def resolve_service_providers(self, info, **kwargs):
+        return self.service_providers.all()
 
-class BrokerNodeConnection(relay.Connection):
+    def resolve_accounts(self, info, **kwargs):
+        return self.accounts.all()
+
+
+class BrokerConnection(NonNullConnection):
     class Meta:
-        node = graphene.NonNull(BrokerNode)
-
-
-class AccountNode(DjangoObjectType):
-    class Meta:
-        model = Account
-        interfaces = (relay.Node, DatabaseId)
-
-    @classmethod
-    # pylint: disable=redefined-builtin
-    def get_node(cls, info, id):
-        return Account.objects.get(id=id)
+        node = BrokerNode
 
 
 class PositionType(graphene.ObjectType):
@@ -147,7 +184,7 @@ class OrderType(graphene.ObjectType):
     order_id = graphene.ID()
     symbol = graphene.String()
     quantity = graphene.Int()
-    limit_price = graphene.Float()
+    limit_price = graphene.Decimal()
     status = graphene.String()
 
     def resolve_order_id(self, info, **kwargs):
@@ -191,7 +228,8 @@ class ServiceProviderSlugInput(graphene.InputObjectType):
 
 class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType, required=True)
-    trading_strategies = graphene.List(graphene.NonNull(TradingStrategyNode))
+    trading_strategies = graphene.List(
+        graphene.NonNull(TradingStrategyNode), required=True)
     brokers = graphene.List(graphene.NonNull(BrokerNode), required=True)
     broker = graphene.Field(
         BrokerNode, database_id=graphene.ID(), slug=graphene.String())
