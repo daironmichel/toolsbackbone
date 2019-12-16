@@ -52,19 +52,9 @@ class ProviderSessionNode(DjangoObjectType):
         return ProviderSession.objects.get(id=id)
 
 
-class QuoteType(graphene.ObjectType):
-    volume = graphene.Int()
-    last_trade = graphene.Decimal()
-    last_trade_direction = graphene.Decimal()
-    market_cap = graphene.Decimal()
-    shares_outstanding = graphene.Int()
-    primary_exchange = graphene.String()
-    company_name = graphene.String()
-
-
 class ServiceProviderNode(DjangoObjectType):
     session = graphene.Field(ProviderSessionNode)
-    quote = graphene.Field(QuoteType, symbol=graphene.String())
+    quote = graphene.Field(lambda: QuoteType, symbol=graphene.String())
     broker = graphene.Field(lambda: BrokerNode, required=True)
     session_status = graphene.Field(SessionStatus, required=True)
 
@@ -176,37 +166,103 @@ class BrokerConnection(NonNullConnection):
         node = BrokerNode
 
 
-class PositionType(graphene.ObjectType):
-    pass
+class QuoteType(graphene.ObjectType):
+    volume = graphene.Int()
+    last_trade = graphene.Decimal()
+    last_trade_direction = graphene.Decimal()
+    market_cap = graphene.Decimal()
+    shares_outstanding = graphene.Int()
+    primary_exchange = graphene.String()
+    company_name = graphene.String()
 
 
 class OrderType(graphene.ObjectType):
-    order_id = graphene.ID()
-    symbol = graphene.String()
-    quantity = graphene.Int()
-    limit_price = graphene.Decimal()
-    status = graphene.String()
+    order_id = graphene.ID(required=True)
+    symbol = graphene.String(required=True)
+    quantity = graphene.Int(required=True)
+    limit_price = graphene.Decimal(required=True)
+    status = graphene.String(required=True)
 
     def resolve_order_id(self, info, **kwargs):
-        return self.get("orderId")
+        order_id = self.get("orderId")
+        if not order_id:
+            raise ValueError(
+                f'Expecting a value for order_id. Got: "{order_id}"')
+        return order_id
 
     def resolve_symbol(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
         instrument = details.get("Instrument")[0]
+        symbol = instrument.get("Product").get("symbol")
+        if not symbol:
+            raise ValueError(f'Expecting a value for symbol. Got: "{symbol}"')
         return instrument.get("Product").get("symbol")
 
     def resolve_quantity(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
         instrument = details.get("Instrument")[0]
-        return instrument.get("quantity")
+        quantity = instrument.get("orderedQuantity")
+        if not quantity and quantity != 0:
+            raise ValueError(
+                f'Expecting a value for quantity. Got: "{quantity}"')
+        return int(quantity)
 
     def resolve_limit_price(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
-        return details.get("limitPrice")
+        limit_price = details.get("limitPrice")
+        if not limit_price and limit_price != 0:
+            raise ValueError(
+                f'Expecting a value for limit_price. Got: "{limit_price}"')
+        value = Decimal(str(limit_price))
+        if value.adjusted() > 0:
+            return value.quantize(Decimal('0.01'))
+        return value
 
     def resolve_status(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
-        return details.get("status")
+        status = details.get("status")
+        if not status:
+            raise ValueError(
+                f'Expecting a value for status. Got: "{status}"')
+        return status
+
+
+class PositionType(graphene.ObjectType):
+    symbol = graphene.String(required=True)
+    price_paid = graphene.Decimal(required=True)
+    quantity = graphene.Int(required=True)
+    total_gain = graphene.Decimal(required=True)
+
+    def resolve_symbol(self, info, **kwargs):
+        symbol = self.get("symbolDescription")
+        if not symbol:
+            raise ValueError(
+                f'Expecting a value for symbol. Got: "{symbol}"')
+        return symbol
+
+    def resolve_price_paid(self, info, **kwargs):
+        price_paid = self.get("pricePaid")
+        if price_paid is None:
+            raise ValueError(
+                f'Expecting a value for price_paid. Got: "{price_paid}"')
+        value = Decimal(str(price_paid))
+        if value.adjusted() >= 0:
+            return value.quantize(Decimal('0.01'))
+        return value
+
+    def resolve_quantity(self, info, **kwargs):
+        quantity = self.get("quantity")
+        if quantity is None:
+            raise ValueError(
+                f'Expecting a value for quantity. Got: "{quantity}"')
+        return quantity
+
+    def resolve_total_gain(self, info, **kwargs):
+        total_gain = self.get("totalGain")
+        if total_gain is None:
+            raise ValueError(
+                f'Expecting a value for total_gain. Got: "{total_gain}"')
+        return Decimal(str(total_gain)).quantize(Decimal('0.01'))
 
 
 class ViewerCredentialsType(graphene.ObjectType):
@@ -238,9 +294,10 @@ class ViewerType(graphene.ObjectType):
     service_provider = graphene.Field(
         ServiceProviderNode, database_id=graphene.ID(), slug=ServiceProviderSlugInput())
     accounts = graphene.List(graphene.NonNull(AccountNode), required=True)
-    # positions = graphene.List(PositionType)
     orders = graphene.List(
-        graphene.NonNull(OrderType), required=True, provider_id=graphene.ID(), account_id=graphene.ID())
+        graphene.NonNull(OrderType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
+    positions = graphene.List(
+        graphene.NonNull(PositionType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
@@ -278,15 +335,37 @@ class ViewerType(graphene.ObjectType):
     def resolve_accounts(self, info, **kwargs):
         return info.context.user.accounts.all()
 
-    def resolve_prositions(self, info, **kwargs):
-        return info.context.user.positions.all()
+    def resolve_orders(self, info, provider_id, account_id=None, **kwargs):
+        provider = info.context.user.service_providers.get(id=provider_id)
+        account = info.context.user.accounts.get(
+            id=account_id) if account_id else None
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
 
-    def resolve_orders(self, info, provider_id, account_id, **kwargs):
-        provider = info.context.user.providers.get(id=provider_id)
-        account = info.context.user.get(id=account_id)
+        if not account_key:
+            raise AttributeError(
+                'Account Key not provided. ' +
+                'Either specify accountId argument or configure a default accountKey on the provider.'
+            )
 
         etrade = Etrade(provider)
-        return etrade.get_orders(account.account_key)
+        return etrade.get_orders(account_key) or []
+
+    def resolve_positions(self, info, provider_id, account_id=None, **kwargs):
+        provider = info.context.user.service_providers.get(id=provider_id)
+        account = info.context.user.accounts.get(
+            id=account_id) if account_id else None
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            raise AttributeError(
+                'Account Key not provided. ' +
+                'Either specify accountId argument or configure a default accountKey on the provider.'
+            )
+
+        etrade = Etrade(provider)
+        return etrade.get_positions(account_key) or []
 
 
 class Query(graphene.ObjectType):

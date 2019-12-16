@@ -1,3 +1,4 @@
+# pylint: disable=wrong-import-order
 """
 Django settings for toolsbackbone project.
 
@@ -9,10 +10,11 @@ https://docs.djangoproject.com/en/2.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.2/ref/settings/
 """
+import django_heroku
+
 import os
 from distutils.util import strtobool
 
-import django_heroku
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -165,10 +167,9 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django.db.backends': {
+        'django': {
             'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': True,
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
         'trader.api': {
             'handlers': ['console'],
@@ -239,5 +240,5 @@ CELERY_TASK_ALWAYS_EAGER = strtobool(os.environ.get(
 # ---------------------------
 
 # This should always be the last line
-django_heroku.settings(locals(), logging=bool(
-    strtobool(os.environ.get('DJANGO_HEROKU_LOGGING', 'true'))))
+django_heroku.settings(locals(), logging=not bool(
+    strtobool(os.environ.get('DJANGO_LOGGING', 'false'))))

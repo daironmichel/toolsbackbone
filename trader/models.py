@@ -18,9 +18,7 @@ class TradingStrategy(models.Model):
     fee_per_trade = models.DecimalField(
         max_digits=5, decimal_places=2, default=0)
     price_margin = models.DecimalField(
-        max_digits=5, decimal_places=2, default=2)
-    max_price_margin = models.DecimalField(
-        max_digits=5, decimal_places=2, default=0.02)
+        max_digits=5, decimal_places=2, default=Decimal('0.02'))
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='trading_strategies')
 
@@ -107,12 +105,13 @@ class ServiceProvider(models.Model):
         max_length=10, choices=PROTOCOLS, default=OAUTH1)
     consumer_key = models.CharField(max_length=250)
     consumer_secret = models.CharField(max_length=250)
-    request_token_url = models.CharField(max_length=250, null=True, blank=True)
-    authorize_url = models.CharField(max_length=250, null=True, blank=True)
-    access_token_url = models.CharField(max_length=250, null=True, blank=True)
-    refresh_url = models.CharField(max_length=250, null=True, blank=True)
-    revoke_url = models.CharField(max_length=250, null=True, blank=True)
-    base_url = models.CharField(max_length=250, null=True, blank=True)
+    request_token_url = models.CharField(max_length=250, default='')
+    authorize_url = models.CharField(max_length=250, default='')
+    access_token_url = models.CharField(max_length=250, default='')
+    refresh_url = models.CharField(max_length=250, default='')
+    revoke_url = models.CharField(max_length=250, default='')
+    base_url = models.CharField(max_length=250, default='')
+    account_key = models.CharField(max_length=250, default='')
     broker = models.ForeignKey(
         Broker, on_delete=models.CASCADE, related_name='service_providers')
     user = models.ForeignKey(
@@ -145,10 +144,10 @@ class ProviderSession(models.Model):
     ]
     status = models.SmallIntegerField(
         choices=SESSION_STATUS, default=REQUESTING)
-    request_token = models.CharField(max_length=250, null=True)
-    request_token_secret = models.CharField(max_length=250, null=True)
-    access_token = models.CharField(max_length=250, null=True)
-    access_token_secret = models.CharField(max_length=250, null=True)
+    request_token = models.CharField(max_length=250, default='')
+    request_token_secret = models.CharField(max_length=250, default='')
+    access_token = models.CharField(max_length=250, default='')
+    access_token_secret = models.CharField(max_length=250, default='')
     created = models.DateTimeField(auto_now_add=True)
     refreshed = models.DateTimeField(auto_now=True)
     provider = models.OneToOneField(

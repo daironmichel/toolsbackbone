@@ -1,11 +1,11 @@
 import logging
+from decimal import Decimal
 
 import graphene
 from django.utils.crypto import get_random_string
 from graphene import relay
 
-from api.graphql.types import (AccountNode, BrokerNode, ServiceProvider,
-                               ServiceProviderNode)
+from api.graphql.types import BrokerNode, ServiceProvider, ServiceProviderNode
 from trader.enums import MarketSession, OrderAction
 from trader.models import Account, ProviderSession, TradingStrategy
 from trader.providers import Etrade
@@ -110,31 +110,47 @@ class SyncAccounts(relay.ClientIDMutation):
         etrade = Etrade(provider)
         etrade.sync_accounts()
 
+        default_account = Account.objects.filter(
+            institution_type='BROKERAGE').first()
+
+        provider.account_key = default_account.account_key
+        provider.save()
+
         return SyncAccounts(broker=provider.broker)
 
 
 class BuyStockError(graphene.Enum):
-    INVALID = 1
+    ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
 
 
 class BuyStock(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
-        account_id = graphene.ID(required=True)
         strategy_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
-
-    account = graphene.Field(AccountNode)
+        account_id = graphene.ID()
 
     error = graphene.Field(BuyStockError)
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, symbol, strategy_id, account_id, provider_id):
-        account = Account.objects.get(id=account_id)
+    def mutate_and_get_payload(cls, root, info, symbol, strategy_id, provider_id, account_id=None):
         strategy = TradingStrategy.objects.get(id=strategy_id)
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
+        account = Account.objects.get(id=account_id) if account_id else None
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            return BuyStock(
+                error=BuyStockError.ACCOUNT_NOT_PROVIDED,
+                error_message='Either specify an accountId that has a valid accountKey ' +
+                'or configure a default accountKey on the provider.'
+            )
+
+        if not account:
+            account = Account.objects.get(account_key=account_key)
 
         order_client_id = get_random_string(length=20)
 
@@ -142,10 +158,10 @@ class BuyStock(relay.ClientIDMutation):
         last_price = etrade.get_price(symbol)
 
         limit_price = get_limit_price(OrderAction.BUY, last_price,
-                                      strategy.price_margin, strategy.max_price_margin)
+                                      strategy.price_margin)
 
         order_params = {
-            'account_key': account.account_key,
+            'account_key': account_key,
             'order_client_id': order_client_id,
             'market_session': MarketSession.current().value,
             'action': OrderAction.BUY.value,
@@ -158,81 +174,94 @@ class BuyStock(relay.ClientIDMutation):
         preview_ids = etrade.preview_order(**order_params)
         etrade.place_order(preview_ids=preview_ids, **order_params)
 
-        return BuyStock(account=account)
+        return BuyStock()
 
 
 class SellStockError(graphene.Enum):
-    INVALID = 1
+    ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
 
 
 class SellStock(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
-        account_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
-
-    account = graphene.Field(AccountNode)
+        account_id = graphene.ID()
 
     error = graphene.Field(SellStockError)
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, symbol, account_id, provider_id):
-        account = Account.objects.get(id=account_id)
-        provider = ServiceProvider.objects.get(id=provider_id) \
-            .select_related('session')
+    def mutate_and_get_payload(cls, root, info, symbol, provider_id, account_id=None):
+        account = Account.objects.get(id=account_id) if account_id else None
+        provider = ServiceProvider.objects.select_related('session') \
+            .get(id=provider_id)
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            return SellStock(
+                error=SellStockError.ACCOUNT_NOT_PROVIDED,
+                error_message='Either specify an accountId that has a valid accountKey ' +
+                'or configure a default accountKey on the provider.'
+            )
 
         order_client_id = get_random_string(length=20)
 
         etrade = Etrade(provider)
-        position_quantity = etrade.get_position_quantity(
-            account.account_key, symbol)
+        position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_price(symbol)
 
         order_params = {
-            'account_key': account.account_key,
+            'account_key': account_key,
             'order_client_id': order_client_id,
-            'market_session': MarketSession.current(),
-            'action': OrderAction.SELL,
+            'market_session': MarketSession.current().value,
+            'action': OrderAction.SELL.value,
             'symbol': symbol,
             'quantity': position_quantity,
-            'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=2, max_margin=0.02)
+            'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=Decimal('0.02'))
         }
 
         preview_ids = etrade.preview_order(**order_params)
         etrade.place_order(preview_ids=preview_ids, **order_params)
 
-        return SellStock(account=account)
+        return SellStock()
 
 
 class CancelOrderError(graphene.Enum):
-    INVALID = 1
+    ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
 
 
 class CancelOrder(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
-        account_id = graphene.ID(required=True)
         order_id = graphene.ID(required=True)
-
-    account = graphene.Field(AccountNode)
+        account_id = graphene.ID()
 
     error = graphene.Field(CancelOrderError)
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, account_id, order_id, provider_id):
-        account = Account.objects.get(id=account_id)
-        provider = ServiceProvider.objects.get(id=provider_id) \
-            .select_related('session')
+    def mutate_and_get_payload(cls, root, info, order_id, provider_id, account_id=None):
+        account = Account.objects.get(id=account_id) if account_id else None
+        provider = ServiceProvider.objects.select_related('session') \
+            .get(id=provider_id)
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            return CancelOrder(
+                error=CancelOrderError.ACCOUNT_NOT_PROVIDED,
+                error_message='Either specify an accountId that has a valid accountKey ' +
+                'or configure a default accountKey on the provider.'
+            )
 
         etrade = Etrade(provider)
         etrade.cancel_order(
-            account_key=account.account_key,
+            account_key=account_key,
             order_id=order_id
         )
 
-        return CancelOrder(account=account)
+        return CancelOrder()
 
 
 class Mutation(graphene.ObjectType):

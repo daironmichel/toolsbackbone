@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import timedelta
 from decimal import Decimal
 
@@ -10,6 +11,9 @@ from .models import Account, ProviderSession, ServiceProvider
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.providers")
+testlogger = logging.getLogger("testLogger")
+djangologger = logging.getLogger("django")
+toolslogger = logging.getLogger("toolsbackbone")
 
 
 class ServiceError(Exception):
@@ -45,6 +49,11 @@ class Etrade:
         else:
             url += endpoint
 
+        # to make the code more efficient we only log when debugging
+        if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
+            logger.debug('%s %s: \n%s %s \nkwargs: %s', self.config.broker.name,
+                         self.config.name, method, url, json.dumps(kwargs, indent=2, sort_keys=True))
+
         if method.upper() == "GET":
             response = self.session.get(url, header_auth=True, **kwargs)
         elif method.upper() == "POST":
@@ -56,6 +65,10 @@ class Etrade:
         else:
             raise NotImplementedError(
                 f'Method {method.upper()} is not implemented.')
+
+        if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
+            logger.debug('Response: %s \n%s', response.status_code,
+                         json.dumps(response.json(), indent=2, sort_keys=True))
 
         if response.status_code == 200:
             # etrade session goes inactive if no requests made for two hours
@@ -90,8 +103,8 @@ class Etrade:
 
         config.session.access_token = access_token
         config.session.access_token_secret = access_token_secret
-        config.session.request_token = None
-        config.session.request_token_secret = None
+        config.session.request_token = ''
+        config.session.request_token_secret = ''
         config.session.status = ProviderSession.CONNECTED
         config.session.save()
 
@@ -194,27 +207,25 @@ class Etrade:
 
     @staticmethod
     def build_order_payload(market_session, action, symbol, limit_price, quantity):
-        return f"""
-        {{  
-            "allOrNone":"false",
-            "priceType":"LIMIT",
-            "orderTerm":"GOOD_FOR_DAY",
-            "marketSession":"{market_session}",
-            "stopPrice":"",
-            "limitPrice":"{str(limit_price)}",
-            "Instrument":[  
-            {{  
-                "Product":{{  
-                    "securityType":"EQ",
-                    "symbol":"{symbol}"
-                }},
-                "orderAction":"{action}",
-                "quantityType":"QUANTITY",
-                "quantity":"{str(quantity)}"
-            }}
+        return {
+            "allOrNone": "false",
+            "priceType": "LIMIT",
+            "orderTerm": "GOOD_FOR_DAY",
+            "marketSession": market_session,
+            "stopPrice": "",
+            "limitPrice": str(limit_price),
+            "Instrument": [
+                {
+                    "Product": {
+                        "securityType": "EQ",
+                        "symbol": symbol
+                    },
+                    "orderAction": action,
+                    "quantityType": "QUANTITY",
+                    "quantity": str(quantity)
+                }
             ]
-        }}
-        """
+        }
 
     def preview_order(self, account_key, order_client_id, market_session, action, symbol, quantity, limit_price):
         if len(str(order_client_id)) > 20:
@@ -224,21 +235,20 @@ class Etrade:
         headers = {"Content-Type": "application/json",
                    "consumerKey": self.config.consumer_key}
 
-        payload = f"""
-        {{  
-            "PreviewOrderRequest":{{
-                "orderType":"EQ",
-                "clientOrderId":"{str(order_client_id)}",
-                "Order":[  
-                    {self.build_order_payload(market_session, action, symbol, limit_price, quantity)}
+        payload = {
+            "PreviewOrderRequest": {
+                "orderType": "EQ",
+                "clientOrderId": str(order_client_id),
+                "Order": [
+                    self.build_order_payload(
+                        market_session, action, symbol, limit_price, quantity)
                 ]
-            }}
-        }}
-        """
+            }
+        }
 
         # payload = json.dumps(payload)
         response = self.request(
-            f'/accounts/{account_key}/orders/preview.json', headers=headers, data=payload, method="POST")
+            f'/accounts/{account_key}/orders/preview.json', headers=headers, data=json.dumps(payload), method="POST")
 
         data = response.json()
 
@@ -267,20 +277,19 @@ class Etrade:
 
         headers = {"Content-Type": "application/json",
                    "consumerKey": self.config.consumer_key}
-        payload = f"""
-        {{  
-            "PlaceOrderRequest":{{
-                "orderType":"EQ",
-                "clientOrderId":"{str(order_client_id)}",
-                "Order":[  
-                    {self.build_order_payload(market_session, action, symbol, limit_price, quantity)}
+        payload = {
+            "PlaceOrderRequest": {
+                "orderType": "EQ",
+                "clientOrderId": str(order_client_id),
+                "Order": [
+                    self.build_order_payload(
+                        market_session, action, symbol, limit_price, quantity)
                 ]
-            }}
-        }}
-        """
+            }
+        }
 
         response = self.request(
-            f'/accounts/{account_key}/orders/place.json', headers=headers, data=payload, method="POST")
+            f'/accounts/{account_key}/orders/place.json', headers=headers, data=json.dumps(payload), method="POST")
 
         data = response.json()
 
@@ -334,8 +343,12 @@ class Etrade:
             return None  # Not Found
 
         if response.status_code != 200:
-            logger.error('Get Orders Failed.', extra=data)
-            raise ServiceError('Get Orders Failed.')
+            error = data.get("Error", {})
+            logger.error('%s | Get orders failed. Code: %s. Message: %s',
+                         response.status_code, error.get(
+                             "code", None), error.get("message", None), extra=data)
+            raise ServiceError(
+                f'Get orders failed. {error.get("message", "")}')
 
         return data.get("OrdersResponse", {}).get("Order", None)
 
@@ -353,7 +366,7 @@ class Etrade:
         response = self.request(
             f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload, method="PUT")
 
-        data = response.jason()
+        data = response.json()
 
         if response.status_code != 200:
             error = data.get("Error", {})
@@ -371,17 +384,26 @@ class Etrade:
         data = response.json()
 
         if response.status_code != 200:
-            logger.error('Get positions failed.', extra=data)
-            raise ServiceError(f'Get positions failed.')
+            error = data.get("Error", {})
+            logger.error('%s | Get positions failed. Code: %s. Message: %s',
+                         response.status_code, error.get(
+                             "code", None), error.get("message", None), extra=data)
+            raise ServiceError(
+                f'Get positions failed. {error.get("message", "")}')
 
-        return data.get("PortfolioResponse", {}).get("AccountPortfolio", None)
+        acc_portfolio = data.get("PortfolioResponse", {}).get(
+            "AccountPortfolio", [])
+
+        if not acc_portfolio:
+            return None
+
+        return acc_portfolio[0].get('Position', None)
 
     def get_position_quantity(self, account_key, symbol):
         positions = self.get_positions(account_key)
 
-        for acct_portfolio in positions:
-            for position in acct_portfolio["Position"]:
-                if position['symbolDescription'] == symbol:
-                    return position["quantity"]
+        for position in positions:
+            if position['symbolDescription'] == symbol:
+                return position["quantity"]
 
         return None
