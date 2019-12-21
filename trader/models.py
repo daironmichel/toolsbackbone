@@ -7,6 +7,19 @@ from django.utils.text import slugify
 # Create your models here.
 
 
+class Settings(models.Model):
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='settings')
+    refresh_rate = models.IntegerField(default=0)
+    default_broker = models.ForeignKey(
+        'Broker', on_delete=models.PROTECT, null=True, default=None, related_name='+')
+    default_strategy = models.ForeignKey(
+        'TradingStrategy', on_delete=models.PROTECT, null=True, default=None, related_name='+')
+
+    def __str__(self):
+        return f'<Settings: {self.id}, user_id: {self.user_id}>'
+
+
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
     exposure_percent = models.DecimalField(
@@ -37,6 +50,8 @@ class TradingStrategy(models.Model):
 class Broker(models.Model):
     name = models.CharField(max_length=250)
     slug = models.SlugField(max_length=250)
+    default_provider = models.ForeignKey(
+        'ServiceProvider', on_delete=models.SET_NULL, null=True, blank=True, default=None, related_name='+')
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='brokers')
 
@@ -84,6 +99,8 @@ class Account(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
     broker = models.ForeignKey(
         Broker, on_delete=models.CASCADE, related_name='accounts')
+    provider = models.ForeignKey(
+        'ServiceProvider', on_delete=models.CASCADE, related_name='accounts')
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='accounts')
 
@@ -111,7 +128,8 @@ class ServiceProvider(models.Model):
     refresh_url = models.CharField(max_length=250, default='')
     revoke_url = models.CharField(max_length=250, default='')
     base_url = models.CharField(max_length=250, default='')
-    account_key = models.CharField(max_length=250, default='')
+    callback_configured = models.BooleanField(default=False, blank=True)
+    account_key = models.CharField(max_length=250, default='', blank=True)
     broker = models.ForeignKey(
         Broker, on_delete=models.CASCADE, related_name='service_providers')
     user = models.ForeignKey(

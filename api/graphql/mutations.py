@@ -5,9 +5,10 @@ import graphene
 from django.utils.crypto import get_random_string
 from graphene import relay
 
-from api.graphql.types import BrokerNode, ServiceProvider, ServiceProviderNode
+from api.graphql.types import (BrokerNode, ServiceProvider,
+                               ServiceProviderNode, SettingsNode)
 from trader.enums import MarketSession, OrderAction
-from trader.models import Account, ProviderSession, TradingStrategy
+from trader.models import Account, ProviderSession, Settings, TradingStrategy
 from trader.providers import Etrade
 from trader.utils import get_limit_price
 
@@ -113,8 +114,9 @@ class SyncAccounts(relay.ClientIDMutation):
         default_account = Account.objects.filter(
             institution_type='BROKERAGE').first()
 
-        provider.account_key = default_account.account_key
-        provider.save()
+        if not provider.account_key:
+            provider.account_key = default_account.account_key
+            provider.save()
 
         return SyncAccounts(broker=provider.broker)
 
@@ -262,6 +264,81 @@ class CancelOrder(relay.ClientIDMutation):
         )
 
         return CancelOrder()
+
+
+class SaveSettingsError(graphene.Enum):
+    INVALID_REFRESH_RATE = 'INVALID_REFRESH_RATE'
+    DEFAULT_BROKER_REQUIRED = 'DEFAULT_BROKER_REQUIRED'
+    DEFAULT_PROVIDER_REQUIRED = 'DEFAULT_PROVIDER_REQUIRED'
+
+
+class SaveSettings(relay.ClientIDMutation):
+    class Input:
+        refresh_rate = graphene.Int(
+            description='Data refresh rate in milliseconds.')
+        default_broker_id = graphene.ID()
+        default_provider_id = graphene.ID()
+        default_account_id = graphene.ID()
+
+    error = graphene.Field(SaveSettingsError)
+    error_message = graphene.String()
+
+    settings = graphene.Field(SettingsNode)
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, refresh_rate=None, default_broker_id=None,
+                               default_provider_id=None, default_account_id=None):
+        if refresh_rate is not None and refresh_rate < 0:
+            return SaveSettings(
+                error=SaveSettingsError.INVALID_REFRESH_RATE,
+                error_message='Refresh rate must be >= 0'
+            )
+
+        if default_provider_id and not default_broker_id:
+            return SaveSettings(
+                error=SaveSettingsError.DEFAULT_BROKER_REQUIRED,
+                error_message='Default broker required to set default provider'
+            )
+
+        if default_account_id and not default_provider_id:
+            return SaveSettings(
+                error=SaveSettingsError.DEFAULT_PROVIDER_REQUIRED,
+                error_message='Default provider required to set default account'
+            )
+
+        user = info.context.user
+        settings = Settings.objects.filter(user=user).first()
+        if not settings:
+            settings = Settings(user=user)
+
+        default_broker = None
+        if default_broker_id:
+            default_borker = user.brokers.get(id=default_broker_id)
+        default_provider = None
+        if default_provider_id:
+            default_provider = user.service_providers.get(
+                id=default_provider_id)
+        default_account = None
+        if default_account_id:
+            default_account = user.accounts.get(id=default_account_id)
+
+        if refresh_rate is not None and refresh_rate >= 0:
+            settings.refresh_rate = refresh_rate
+
+        if default_broker:
+            settings.default_broker = default_borker
+
+        settings.save()
+
+        if default_provider and default_broker:
+            default_broker.default_provider = default_provider
+            default_broker.save()
+
+        if default_account and default_provider:
+            default_provider.account_key = default_account.account_key
+            default_provider.save()
+
+        return SaveSettings(settings=settings)
 
 
 class Mutation(graphene.ObjectType):

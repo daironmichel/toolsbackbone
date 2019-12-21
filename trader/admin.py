@@ -1,9 +1,15 @@
 from django.contrib import admin
 
 from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
-                           TradingStrategy)
+                           Settings, TradingStrategy)
 
 # Register your models here.
+
+
+@admin.register(Settings)
+class SettingsAdmin(admin.ModelAdmin):
+    list_display = ('user', 'refresh_rate',
+                    'default_broker', 'default_strategy')
 
 
 @admin.register(TradingStrategy)

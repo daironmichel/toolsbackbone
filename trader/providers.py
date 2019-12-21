@@ -68,7 +68,7 @@ class Etrade:
 
         if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
             logger.debug('Response: %s \n%s', response.status_code,
-                         json.dumps(response.json(), indent=2, sort_keys=True))
+                         json.dumps(response.content.decode('utf-8'), indent=2, sort_keys=True))
 
         if response.status_code == 200:
             # etrade session goes inactive if no requests made for two hours
@@ -173,6 +173,7 @@ class Etrade:
             if not account:
                 account = Account()
                 account.broker = self.config.broker
+                account.provider = self.config
                 account.user_id = self.config.broker.user_id
 
             account.name = acc_data.get('accountName')
@@ -337,10 +338,10 @@ class Etrade:
         # headers = {"consumerkey": self.config.consumer_key}
         response = self.request(f'/accounts/{account_key}/orders.json')
 
-        data = response.json()
-
         if response.status_code == 204:
             return None  # Not Found
+
+        data = response.json()
 
         if response.status_code != 200:
             error = data.get("Error", {})

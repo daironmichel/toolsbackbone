@@ -5,7 +5,7 @@ from graphene import relay
 from graphene_django.types import DjangoObjectType
 
 from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
-                           TradingStrategy)
+                           Settings, TradingStrategy)
 from trader.providers import Etrade
 
 from .graphene_overrides import NonNullConnection
@@ -16,6 +16,18 @@ class DatabaseId(graphene.Interface):
 
     def resolve_database_id(self, info, **kwargs):
         return getattr(self, 'id')
+
+
+class SettingsNode(DjangoObjectType):
+    class Meta:
+        exclude_fields = ('user',)
+        model = Settings
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    # pylint: disable=redefined-builtin
+    def get_node(cls, info, id):
+        return Settings.objects.get(id=id)
 
 
 class TradingStrategyNode(DjangoObjectType):
@@ -284,6 +296,7 @@ class ServiceProviderSlugInput(graphene.InputObjectType):
 
 class ViewerType(graphene.ObjectType):
     credentials = graphene.Field(ViewerCredentialsType, required=True)
+    settings = graphene.Field(SettingsNode)
     trading_strategies = graphene.List(
         graphene.NonNull(TradingStrategyNode), required=True)
     brokers = graphene.List(graphene.NonNull(BrokerNode), required=True)
@@ -301,6 +314,9 @@ class ViewerType(graphene.ObjectType):
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
+
+    def resolve_settings(self, info, **kwargs):
+        return Settings.objects.filter(user=info.context.user).first()
 
     def resolve_trading_strategies(self, info, **kwargs):
         return info.context.user.trading_strategies.all()
