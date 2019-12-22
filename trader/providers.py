@@ -132,7 +132,7 @@ class Etrade:
         # request accounts
         response = self.request('/accounts/list.json')
 
-        data = response.json()
+        data = response.json() if response.content else {}
         if not data:
             return None
 
@@ -153,7 +153,7 @@ class Etrade:
         response = self.request(f'/accounts/{account_key}/balance.json',
                                 params=params, headers=headers)
 
-        data = response.json()
+        data = response.json() if response.content else {}
 
         if not data:
             return None
@@ -196,7 +196,7 @@ class Etrade:
 
     def get_quote(self, symbol):
         response = self.request(f'/market/quote/{symbol}.json')
-        data = response.json()
+        data = response.json() if response.content else {}
         quotes = data.get("QuoteResponse", {}).get("QuoteData", None)
         if not quotes:
             return None
@@ -251,7 +251,7 @@ class Etrade:
         response = self.request(
             f'/accounts/{account_key}/orders/preview.json', headers=headers, data=json.dumps(payload), method="POST")
 
-        data = response.json()
+        data = response.json() if response.content else {}
 
         if response.status_code != 200:
             error = data.get("Error", {})
@@ -292,7 +292,7 @@ class Etrade:
         response = self.request(
             f'/accounts/{account_key}/orders/place.json', headers=headers, data=json.dumps(payload), method="POST")
 
-        data = response.json()
+        data = response.json() if response.content else {}
 
         if response.status_code != 200:
             error = data.get("Error", {})
@@ -318,10 +318,10 @@ class Etrade:
         response = self.request(
             f'/accounts/{account_key}/orders.json', params=params, headers=headers)
 
-        data = response.json()
-
         if response.status_code == 204:
             return None  # Not Found
+
+        data = response.json() if response.content else {}
 
         if response.status_code != 200:
             logger.error('Order Details Failed.', extra=data)
@@ -341,7 +341,7 @@ class Etrade:
         if response.status_code == 204:
             return None  # Not Found
 
-        data = response.json()
+        data = response.json() if response.content else {}
 
         if response.status_code != 200:
             error = data.get("Error", {})
@@ -367,7 +367,7 @@ class Etrade:
         response = self.request(
             f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload, method="PUT")
 
-        data = response.json()
+        data = response.json() if response.content else {}
 
         if response.status_code != 200:
             error = data.get("Error", {})
@@ -382,7 +382,10 @@ class Etrade:
     def get_positions(self, account_key):
         response = self.request(f'/accounts/{account_key}/portfolio.json')
 
-        data = response.json()
+        if response.status_code == 204:
+            return None  # None Found
+
+        data = response.json() if response.content else {}
 
         if response.status_code != 200:
             error = data.get("Error", {})
