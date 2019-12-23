@@ -32,7 +32,7 @@ DEBUG = bool(strtobool(os.environ.get('DJANGO_DEBUG', 'false')))
 ALLOWED_HOSTS = []
 
 SECURE_SSL_REDIRECT = bool(
-    strtobool(os.environ.get('DJANGO_HTTPS_ONLY', 'false')))
+    strtobool(os.environ.get('DJANGO_HTTPS_ONLY', 'true')))
 
 
 # Application definition
