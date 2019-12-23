@@ -1,9 +1,11 @@
+import datetime
 import json
 import logging
 import os
 from datetime import timedelta
 from decimal import Decimal
 
+import pytz
 from django.utils import timezone
 from rauth import OAuth1Service
 
@@ -334,9 +336,18 @@ class Etrade:
 
         return None
 
-    def get_orders(self, account_key):
-        # headers = {"consumerkey": self.config.consumer_key}
-        response = self.request(f'/accounts/{account_key}/orders.json')
+    def get_orders(self, account_key, from_date=None, to_date=None):
+        ny_tz = pytz.timezone("America/New_York")
+        now = datetime.datetime.now(ny_tz)
+        params = {}
+        if not from_date:
+            from_date = now - timedelta(days=1)
+            params['fromDate'] = from_date.strftime("%m%d%Y")
+        if not to_date:
+            params['toDate'] = now.strftime("%m%d%Y")
+
+        response = self.request(
+            f'/accounts/{account_key}/orders.json', params=params)
 
         if response.status_code == 204:
             return None  # Not Found
