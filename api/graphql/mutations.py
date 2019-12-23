@@ -45,7 +45,8 @@ class ConnectProvider(relay.ClientIDMutation):
         etrade = Etrade(provider)
         authorize_url = etrade.get_authorize_url()
 
-        return ConnectProvider(service_provider=provider, authorize_url=authorize_url, callback_enabled=False)
+        return ConnectProvider(service_provider=provider, authorize_url=authorize_url,
+                               callback_enabled=provider.callback_configured)
 
 
 class AuthorizeConnectionError(graphene.Enum):
@@ -348,3 +349,4 @@ class Mutation(graphene.ObjectType):
     buy_stock = BuyStock.Field(required=True)
     sell_stock = SellStock.Field(required=True)
     cancel_order = CancelOrder.Field(required=True)
+    save_settings = SaveSettings.Field(required=True)
