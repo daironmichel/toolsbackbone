@@ -284,6 +284,7 @@ class Etrade:
             "PlaceOrderRequest": {
                 "orderType": "EQ",
                 "clientOrderId": str(order_client_id),
+                "PreviewIds": [{"previewId": pid} for pid in preview_ids],
                 "Order": [
                     self.build_order_payload(
                         market_session, action, symbol, limit_price, quantity)
