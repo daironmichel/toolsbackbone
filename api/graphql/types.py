@@ -194,6 +194,7 @@ class OrderType(graphene.ObjectType):
     quantity = graphene.Int(required=True)
     limit_price = graphene.Decimal(required=True)
     status = graphene.String(required=True)
+    action = graphene.String(required=True)
 
     def resolve_order_id(self, info, **kwargs):
         order_id = self.get("orderId")
@@ -237,6 +238,15 @@ class OrderType(graphene.ObjectType):
             raise ValueError(
                 f'Expecting a value for status. Got: "{status}"')
         return status
+
+    def resolve_action(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        instrument = details.get("Instrument")[0]
+        action = instrument.get("orderAction")
+        if not action:
+            raise ValueError(
+                f'Expecting a value for action. Got: "{action}"')
+        return action
 
 
 class PositionType(graphene.ObjectType):

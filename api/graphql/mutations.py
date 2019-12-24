@@ -207,24 +207,23 @@ class SellStock(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
-        order_client_id = get_random_string(length=20)
-
         etrade = Etrade(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_price(symbol)
 
         order_params = {
             'account_key': account_key,
-            'order_client_id': order_client_id,
             'market_session': MarketSession.current().value,
             'action': OrderAction.SELL.value,
             'symbol': symbol,
             'quantity': position_quantity,
-            'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=Decimal('0.02'))
+            'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=Decimal('0.01'))
         }
 
-        preview_ids = etrade.preview_order(**order_params)
-        etrade.place_order(preview_ids=preview_ids, **order_params)
+        preview_ids = etrade.preview_order(
+            order_client_id=get_random_string(length=20), **order_params)
+        etrade.place_order(order_client_id=get_random_string(
+            length=20), preview_ids=preview_ids, **order_params)
 
         return SellStock()
 
