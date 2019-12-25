@@ -193,6 +193,7 @@ class OrderType(graphene.ObjectType):
     symbol = graphene.String(required=True)
     quantity = graphene.Int(required=True)
     limit_price = graphene.Decimal(required=True)
+    execution_price = graphene.Decimal(required=True)
     status = graphene.String(required=True)
     action = graphene.String(required=True)
 
@@ -227,6 +228,18 @@ class OrderType(graphene.ObjectType):
             raise ValueError(
                 f'Expecting a value for limit_price. Got: "{limit_price}"')
         value = Decimal(str(limit_price))
+        if value.adjusted() > 0:
+            return value.quantize(Decimal('0.01'))
+        return value
+
+    def resolve_execution_price(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        instrument = details.get("Instrument")[0]
+        execution_price = instrument.get("averageExecutionPrice")
+        if not execution_price and execution_price != 0:
+            raise ValueError(
+                f'Expecting a value for execution_price. Got: "{execution_price}"')
+        value = Decimal(str(execution_price))
         if value.adjusted() > 0:
             return value.quantize(Decimal('0.01'))
         return value
