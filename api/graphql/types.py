@@ -235,10 +235,7 @@ class OrderType(graphene.ObjectType):
     def resolve_execution_price(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
         instrument = details.get("Instrument")[0]
-        execution_price = instrument.get("averageExecutionPrice")
-        if not execution_price and execution_price != 0:
-            raise ValueError(
-                f'Expecting a value for execution_price. Got: "{execution_price}"')
+        execution_price = instrument.get("averageExecutionPrice", 0)
         value = Decimal(str(execution_price))
         if value.adjusted() > 0:
             return value.quantize(Decimal('0.01'))
