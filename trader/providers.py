@@ -206,9 +206,17 @@ class Etrade:
             return None
         return quotes[0]
 
-    def get_price(self, symbol: str) -> Decimal:
+    def get_last_trade_price(self, symbol: str) -> Decimal:
         quote = self.get_quote(symbol)
         return Decimal(str(quote.get("All").get("lastTrade")))
+
+    def get_bid_price(self, symbol: str) -> Decimal:
+        quote = self.get_quote(symbol)
+        return Decimal(str(quote.get("All").get("bid")))
+
+    def get_ask_price(self, symbol: str) -> Decimal:
+        quote = self.get_quote(symbol)
+        return Decimal(str(quote.get("All").get("bid")))
 
     @staticmethod
     def build_order_payload(market_session, action, symbol, limit_price, quantity):

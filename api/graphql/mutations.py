@@ -156,7 +156,7 @@ class BuyStock(relay.ClientIDMutation):
             account = Account.objects.get(account_key=account_key)
 
         etrade = Etrade(provider)
-        last_price = etrade.get_price(symbol)
+        last_price = etrade.get_bid_price(symbol)
 
         limit_price = get_limit_price(OrderAction.BUY, last_price,
                                       strategy.price_margin)
@@ -209,7 +209,7 @@ class SellStock(relay.ClientIDMutation):
 
         etrade = Etrade(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
-        last_price = etrade.get_price(symbol)
+        last_price = etrade.get_ask_price(symbol)
 
         order_params = {
             'account_key': account_key,
