@@ -25,7 +25,9 @@ class BrokerAdmin(admin.ModelAdmin):
 
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ('user', 'name', 'cash_buying_power',
+    list_display = ('user', 'name', 'account_id', 'institution_type',
+                    'account_type', 'account_mode',
+                    'pdt_status', 'cash_buying_power',
                     'margin_buying_power', 'last_updated')
 
 

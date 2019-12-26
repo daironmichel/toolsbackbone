@@ -178,7 +178,9 @@ class Etrade:
                 account.provider = self.config
                 account.user_id = self.config.broker.user_id
 
-            account.name = acc_data.get('accountName')
+            account_name = acc_data.get('accountName')
+            if account_name:
+                account.name = account_name
             account.description = acc_data.get('accountDesc')
             account.account_key = acc_data.get('accountIdKey')
             account.account_id = acc_data.get('accountId')
