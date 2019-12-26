@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -23,15 +24,15 @@ class Settings(models.Model):
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
     exposure_percent = models.DecimalField(
-        max_digits=3, decimal_places=0, max_length=100)
+        max_digits=3, decimal_places=0, validators=[MaxValueValidator(Decimal(100))])
     profit_percent = models.DecimalField(
-        max_digits=3, decimal_places=0, max_length=100)
+        max_digits=3, decimal_places=0, validators=[MaxValueValidator(Decimal(100))])
     loss_percent = models.DecimalField(
-        max_digits=3, decimal_places=0, max_length=100)
+        max_digits=3, decimal_places=0, validators=[MaxValueValidator(Decimal(100))])
     fee_per_trade = models.DecimalField(
         max_digits=5, decimal_places=2, default=0)
     price_margin = models.DecimalField(
-        max_digits=5, decimal_places=2, default=Decimal('0.02'))
+        max_digits=5, decimal_places=2, max_length=Decimal('0.01'), default=Decimal('0.01'), blank=True)
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='trading_strategies')
 

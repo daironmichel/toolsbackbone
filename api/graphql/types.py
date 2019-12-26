@@ -264,6 +264,7 @@ class PositionType(graphene.ObjectType):
     price_paid = graphene.Decimal(required=True)
     quantity = graphene.Int(required=True)
     total_gain = graphene.Decimal(required=True)
+    total_gain_pct = graphene.Decimal(required=True)
 
     def resolve_symbol(self, info, **kwargs):
         symbol = self.get("symbolDescription")
@@ -295,6 +296,13 @@ class PositionType(graphene.ObjectType):
             raise ValueError(
                 f'Expecting a value for total_gain. Got: "{total_gain}"')
         return Decimal(str(total_gain)).quantize(Decimal('0.01'))
+
+    def resolve_total_gain_pct(self, info, **kwargs):
+        total_gain_pct = self.get("totalGainPct")
+        if total_gain_pct is None:
+            raise ValueError(
+                f'Expecting a value for total_gain_pct. Got: "{total_gain_pct}"')
+        return Decimal(str(total_gain_pct)).quantize(Decimal('0.01'))
 
 
 class ViewerCredentialsType(graphene.ObjectType):
