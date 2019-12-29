@@ -259,6 +259,19 @@ class OrderType(graphene.ObjectType):
         return action
 
 
+class TransactionType(graphene.ObjectType):
+    symbol = graphene.String(required=True)
+
+    def resolve_symbol(self, info, **kwargs):
+        brokerage = self.get("brokerage")
+        product = brokerage.get("product")
+        symbol = product.get("symbol")
+        if not symbol:
+            raise ValueError(
+                f'Expecting a value for symbol. Got: "{symbol}"')
+        return symbol
+
+
 class PositionType(graphene.ObjectType):
     symbol = graphene.String(required=True)
     price_paid = graphene.Decimal(required=True)
@@ -339,6 +352,8 @@ class ViewerType(graphene.ObjectType):
         graphene.NonNull(OrderType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
     positions = graphene.List(
         graphene.NonNull(PositionType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
+    transactions = graphene.List(
+        graphene.NonNull(TransactionType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
@@ -410,6 +425,22 @@ class ViewerType(graphene.ObjectType):
 
         etrade = Etrade(provider)
         return etrade.get_positions(account_key) or []
+
+    def resolve_transactions(self, info, provider_id, account_id=None, **kwargs):
+        provider = info.context.user.service_providers.get(id=provider_id)
+        account = info.context.user.accounts.get(
+            id=account_id) if account_id else None
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            raise AttributeError(
+                'Account Key not provided. ' +
+                'Either specify accountId argument or configure a default accountKey on the provider.'
+            )
+
+        etrade = Etrade(provider)
+        return etrade.get_transactions(account_key) or []
 
 
 class Query(graphene.ObjectType):

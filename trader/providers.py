@@ -433,3 +433,24 @@ class Etrade:
                 return position["quantity"]
 
         return None
+
+    def get_transactions(self, account_key):
+        response = self.request(f'/accounts/{account_key}/transactions.json')
+
+        if response.status_code == 204:
+            return None  # None Found
+
+        data = response.json() if response.content else {}
+
+        if response.status_code != 200:
+            error = data.get("Error", {})
+            logger.error('%s | Get transactions failed. Code: %s. Message: %s',
+                         response.status_code, error.get(
+                             "code", None), error.get("message", None), extra=data)
+            raise ServiceError(
+                f'Get transactions failed. {error.get("message", "")}')
+
+        acc_transactions = data.get("TransactionListResponse", {}).get(
+            "Transaction", [])
+
+        return acc_transactions
