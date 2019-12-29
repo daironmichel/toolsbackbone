@@ -261,15 +261,72 @@ class OrderType(graphene.ObjectType):
 
 class TransactionType(graphene.ObjectType):
     symbol = graphene.String(required=True)
+    transaction_type = graphene.String(required=True)
+    quantity = graphene.Int(required=True)
+    amount = graphene.Decimal(required=True)
+    price = graphene.Decimal(required=True)
+    fee = graphene.Decimal(required=True)
+    transaction_date = graphene.DateTime(required=True)
 
     def resolve_symbol(self, info, **kwargs):
         brokerage = self.get("brokerage")
-        product = brokerage.get("product")
-        symbol = product.get("symbol")
+        symbol = brokerage.get("displaySymbol")
         if not symbol:
             raise ValueError(
                 f'Expecting a value for symbol. Got: "{symbol}"')
         return symbol
+
+    def resolve_transaction_type(self, info, **kwargs):
+        transaction_type = self.get("transactionType")
+        if not transaction_type:
+            raise ValueError(
+                f'Expecting a value for transaction_type. Got: "{transaction_type}"')
+        return transaction_type
+
+    def resolve_quantity(self, info, **kwargs):
+        brokerage = self.get("brokerage")
+        quantity = brokerage.get("quantity")
+        if not quantity:
+            raise ValueError(
+                f'Expecting a value for quantity. Got: "{quantity}"')
+        return quantity
+
+    def resolve_amount(self, info, **kwargs):
+        amount = self.get("amount")
+        if not amount:
+            raise ValueError(
+                f'Expecting a value for amount. Got: "{amount}"')
+        return amount
+
+    def resolve_price(self, info, **kwargs):
+        brokerage = self.get("brokerage")
+        price = brokerage.get("price")
+        if not price:
+            raise ValueError(
+                f'Expecting a value for price. Got: "{price}"')
+        return price
+
+    def resolve_fee(self, info, **kwargs):
+        brokerage = self.get("brokerage")
+        fee = brokerage.get("fee")
+        if not fee:
+            raise ValueError(
+                f'Expecting a value for fee. Got: "{fee}"')
+        return fee
+
+    def resolve_transaction_date(self, info, **kwargs):
+        transaction_date = self.get("transactionDate")
+        if not transaction_date:
+            raise ValueError(
+                f'Expecting a value for transaction_date. Got: "{transaction_date}"')
+        return transaction_date
+
+
+class PerformanceType(graphene.ObjectType):
+    symbol = graphene.String(required=True)
+    quantity = graphene.Int(required=True)
+    amount = graphene.Decimal(required=True)
+    date = graphene.DateTime(required=True)
 
 
 class PositionType(graphene.ObjectType):
@@ -353,7 +410,11 @@ class ViewerType(graphene.ObjectType):
     positions = graphene.List(
         graphene.NonNull(PositionType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
     transactions = graphene.List(
-        graphene.NonNull(TransactionType), required=True, provider_id=graphene.ID(required=True), account_id=graphene.ID())
+        graphene.NonNull(TransactionType), required=True,
+        provider_id=graphene.ID(required=True), account_id=graphene.ID())
+    performances = graphene.List(
+        graphene.NonNull(PerformanceType), required=True,
+        provider_id=graphene.ID(required=True), account_id=graphene.ID())
 
     def resolve_credentials(self, info, **kwargs):
         return ViewerCredentialsType()
@@ -441,6 +502,56 @@ class ViewerType(graphene.ObjectType):
 
         etrade = Etrade(provider)
         return etrade.get_transactions(account_key) or []
+
+    def resolve_performances(self, info, provider_id, account_id=None, **kwargs):
+        provider = info.context.user.service_providers.get(id=provider_id)
+        account = info.context.user.accounts.get(
+            id=account_id) if account_id else None
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            raise AttributeError(
+                'Account Key not provided. ' +
+                'Either specify accountId argument or configure a default accountKey on the provider.'
+            )
+
+        etrade = Etrade(provider)
+        transactions = etrade.get_transactions(account_key) or []
+
+        symbol_map = {}
+        for tran in transactions:
+            brokerage = tran.get("brokerage")
+            transaction_type = tran.get("transactionType")
+            transaction_date = tran.get("transactionDate")
+            symbol = brokerage.get("displaySymbol")
+            quantity = brokerage.get("quantity")
+            amount = tran.get("amount")
+            if transaction_type not in ('Bought', 'Sould'):
+                continue
+            if symbol not in symbol_map:
+                symbol_map[symbol] = {
+                    'symbol': symbol,
+                    'quantity': int(quantity),
+                    'amount': Decimal(amount),
+                    'date': transaction_date,
+                    'bought': 1 if transaction_type == 'Bought' else 0,
+                    'sould': 1 if transaction_type == 'Bought' else 0
+                }
+            else:
+                symbol_map[symbol]['date'] = transaction_date
+                symbol_map[symbol]['amount'] = symbol_map[symbol]['amount'] + \
+                    Decimal(amount)
+                if transaction_type == 'Bought':
+                    symbol_map['bought'] = symbol_map['bought'] + 1
+                else:
+                    symbol_map['sould'] = symbol_map['sould'] + 1
+
+        performances = [val for val in symbol_map.values()
+                        if val['bought'] == val['sold']]
+        performances.sort(lambda val: val['date'])
+
+        return performances
 
 
 class Query(graphene.ObjectType):
