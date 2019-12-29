@@ -527,7 +527,7 @@ class ViewerType(graphene.ObjectType):
             symbol = brokerage.get("displaySymbol")
             quantity = brokerage.get("quantity")
             amount = tran.get("amount")
-            if transaction_type not in ('Bought', 'Sould'):
+            if transaction_type not in ('Bought', 'Sold'):
                 continue
             if symbol not in symbol_map:
                 symbol_map[symbol] = {
@@ -536,7 +536,7 @@ class ViewerType(graphene.ObjectType):
                     'amount': Decimal(amount),
                     'date': transaction_date,
                     'bought': 1 if transaction_type == 'Bought' else 0,
-                    'sould': 1 if transaction_type == 'Bought' else 0
+                    'sold': 1 if transaction_type == 'Sold' else 0
                 }
             else:
                 symbol_map[symbol]['date'] = transaction_date
@@ -545,7 +545,7 @@ class ViewerType(graphene.ObjectType):
                 if transaction_type == 'Bought':
                     symbol_map['bought'] = symbol_map['bought'] + 1
                 else:
-                    symbol_map['sould'] = symbol_map['sould'] + 1
+                    symbol_map['sold'] = symbol_map['sold'] + 1
 
         performances = [val for val in symbol_map.values()
                         if val['bought'] == val['sold']]
