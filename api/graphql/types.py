@@ -530,7 +530,7 @@ class ViewerType(graphene.ObjectType):
             if transaction_type not in ('Bought', 'Sold'):
                 continue
             if symbol not in symbol_map:
-                symbol_map[symbol] = {
+                performance = {
                     'symbol': symbol,
                     'quantity': int(quantity),
                     'amount': Decimal(amount),
@@ -538,14 +538,16 @@ class ViewerType(graphene.ObjectType):
                     'bought': 1 if transaction_type == 'Bought' else 0,
                     'sold': 1 if transaction_type == 'Sold' else 0
                 }
+                symbol_map[symbol] = performance
             else:
-                symbol_map[symbol]['date'] = transaction_date
-                symbol_map[symbol]['amount'] = symbol_map[symbol]['amount'] + \
+                performace = symbol_map[symbol]
+                performace['date'] = transaction_date
+                performace['amount'] = performace['amount'] + \
                     Decimal(amount)
                 if transaction_type == 'Bought':
-                    symbol_map['bought'] = symbol_map['bought'] + 1
+                    performace['bought'] = performace['bought'] + 1
                 else:
-                    symbol_map['sold'] = symbol_map['sold'] + 1
+                    performace['sold'] = performace['sold'] + 1
 
         performances = [val for val in symbol_map.values()
                         if val['bought'] == val['sold']]
