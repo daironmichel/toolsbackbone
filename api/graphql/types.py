@@ -535,7 +535,7 @@ class ViewerType(graphene.ObjectType):
                     'symbol': symbol,
                     'quantity': int(quantity),
                     'amount': Decimal(amount),
-                    'date': datetime.date(transaction_date/1000),
+                    'date': datetime.datetime(transaction_date//1000),
                     'bought': 1 if transaction_type == 'Bought' else 0,
                     'sold': 1 if transaction_type == 'Sold' else 0
                 }
