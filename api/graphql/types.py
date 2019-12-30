@@ -551,7 +551,7 @@ class ViewerType(graphene.ObjectType):
 
         performances = [val for val in symbol_map.values()
                         if val['bought'] == val['sold']]
-        performances.sort(lambda val: val['date'])
+        performances.sort(key=lambda val: val['date'])
 
         return performances
 
