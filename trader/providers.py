@@ -434,7 +434,16 @@ class Etrade:
 
         return None
 
-    def get_transactions(self, account_key):
+    def get_transactions(self, account_key, from_date=None, to_date=None):
+        ny_tz = pytz.timezone("America/New_York")
+        now = datetime.datetime.now(ny_tz)
+        params = {}
+        if not from_date:
+            from_date = now - timedelta(days=7)
+            params['fromDate'] = from_date.strftime("%m%d%Y")
+        if not to_date:
+            params['toDate'] = now.strftime("%m%d%Y")
+
         response = self.request(f'/accounts/{account_key}/transactions.json')
 
         if response.status_code == 204:
