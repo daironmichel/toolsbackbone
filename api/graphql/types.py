@@ -333,7 +333,7 @@ class PerformanceType(graphene.ObjectType):
         return self.get('amount').quantize(Decimal('0.01'))
 
     def resolve_quantity(self, info, **kwargs):
-        return self.get('sold')
+        return self.get('bought')
 
 
 class PositionType(graphene.ObjectType):
@@ -541,8 +541,8 @@ class ViewerType(graphene.ObjectType):
                     'symbol': symbol,
                     'amount': Decimal(amount),
                     'date': datetime.datetime.fromtimestamp(transaction_date//1000),
-                    'bought': int(quantity) * -1 if transaction_type == 'Bought' else 0,
-                    'sold': int(quantity) if transaction_type == 'Sold' else 0
+                    'bought': int(quantity) if transaction_type == 'Bought' else 0,
+                    'sold': int(quantity) * -1 if transaction_type == 'Sold' else 0
                 }
                 symbol_map[symbol] = performance
             else:
@@ -553,9 +553,10 @@ class ViewerType(graphene.ObjectType):
                     Decimal(amount)
                 if transaction_type == 'Bought':
                     performace['bought'] = performace['bought'] + \
-                        int(quantity) * -1
+                        int(quantity)
                 else:
-                    performace['sold'] = performace['sold'] + int(quantity)
+                    performace['sold'] = performace['sold'] + \
+                        int(quantity) * -1
 
         performances = [val for val in symbol_map.values()
                         if val['bought'] == val['sold']]
