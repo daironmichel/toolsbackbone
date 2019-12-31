@@ -542,7 +542,8 @@ class ViewerType(graphene.ObjectType):
                 symbol_map[symbol] = performance
             else:
                 performace = symbol_map[symbol]
-                performace['date'] = transaction_date
+                performace['date'] = datetime.datetime.fromtimestamp(
+                    transaction_date//1000)
                 performace['amount'] = performace['amount'] + \
                     Decimal(amount)
                 if transaction_type == 'Bought':
