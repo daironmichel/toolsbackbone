@@ -333,7 +333,7 @@ class PerformanceType(graphene.ObjectType):
         return self.get('amount').quantize(Decimal('0.01'))
 
     def resolve_quantity(self, info, **kwargs):
-        return self.get('sold').quantize(Decimal('0.01'))
+        return self.get('sold')
 
 
 class PositionType(graphene.ObjectType):
