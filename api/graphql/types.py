@@ -329,6 +329,12 @@ class PerformanceType(graphene.ObjectType):
     amount = graphene.Decimal(required=True)
     date = graphene.DateTime(required=True)
 
+    def resolve_amount(self, info, **kwargs):
+        return self.get('amount').quantize(Decimal('0.01'))
+
+    def resolve_quantity(self, info, **kwargs):
+        return self.get('sold').quantize(Decimal('0.01'))
+
 
 class PositionType(graphene.ObjectType):
     symbol = graphene.String(required=True)
@@ -533,11 +539,10 @@ class ViewerType(graphene.ObjectType):
             if symbol not in symbol_map:
                 performance = {
                     'symbol': symbol,
-                    'quantity': int(quantity),
                     'amount': Decimal(amount),
                     'date': datetime.datetime.fromtimestamp(transaction_date//1000),
-                    'bought': 1 if transaction_type == 'Bought' else 0,
-                    'sold': 1 if transaction_type == 'Sold' else 0
+                    'bought': int(quantity) * -1 if transaction_type == 'Bought' else 0,
+                    'sold': int(quantity) if transaction_type == 'Sold' else 0
                 }
                 symbol_map[symbol] = performance
             else:
@@ -547,13 +552,14 @@ class ViewerType(graphene.ObjectType):
                 performace['amount'] = performace['amount'] + \
                     Decimal(amount)
                 if transaction_type == 'Bought':
-                    performace['bought'] = performace['bought'] + 1
+                    performace['bought'] = performace['bought'] + \
+                        int(quantity) * -1
                 else:
-                    performace['sold'] = performace['sold'] + 1
+                    performace['sold'] = performace['sold'] + int(quantity)
 
         performances = [val for val in symbol_map.values()
                         if val['bought'] == val['sold']]
-        performances.sort(key=lambda val: val['date'])
+        performances.sort(key=lambda val: val['date'], reverse=True)
 
         return performances
 
