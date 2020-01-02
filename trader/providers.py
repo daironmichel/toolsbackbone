@@ -201,9 +201,31 @@ class Etrade:
     def get_quote(self, symbol):
         response = self.request(f'/market/quote/{symbol}.json')
         data = response.json() if response.content else {}
-        quotes = data.get("QuoteResponse", {}).get("QuoteData", None)
+
+        if response.status_code != 200:
+            error = data.get("Error", {})
+            logger.error('%s | Quote symbol failed. Code: %s. Message: %s',
+                         response.status_code, error.get(
+                             "code", None), error.get("message", None), extra=data)
+            raise ServiceError(
+                f'Quote symbol failed. {error.get("message", "")}')
+
+        quote_respnse = data.get("QuoteResponse", {})
+        quotes = quote_respnse.get("QuoteData", [])
+        messages = quote_respnse.get("Messages", {}).get("Message", [])
         if not quotes:
-            return None
+            if messages:
+                error = messages[0]
+                logger.error('%s | Quote symbol failed. Code: %s. Message: %s',
+                             response.status_code, error.get(
+                                 "code", None), error.get("description", None), extra=data)
+                raise ServiceError(
+                    f'Quote symbol failed. {error.get("type")} {error.get("code")}: {error.get("description", "")}')
+            else:
+                return None
+        elif messages:
+            logger.warning('Messages recieved from quote.', extra=data)
+
         return quotes[0]
 
     def get_last_trade_price(self, symbol: str) -> Decimal:
