@@ -7,7 +7,7 @@ from graphene import relay
 
 from api.graphql.types import (BrokerNode, ServiceProvider,
                                ServiceProviderNode, SettingsNode)
-from trader.enums import MarketSession, OrderAction
+from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import Account, ProviderSession, Settings, TradingStrategy
 from trader.providers import Etrade
 from trader.utils import get_limit_price
@@ -166,6 +166,7 @@ class BuyStock(relay.ClientIDMutation):
             'market_session': MarketSession.current().value,
             'action': OrderAction.BUY.value,
             'symbol': symbol,
+            'price_type': PriceType.LIMIT.value,
             'quantity': strategy.get_quantity_for(
                 buying_power=account.cash_buying_power, price_per_share=last_price),
             'limit_price': limit_price
@@ -216,6 +217,7 @@ class SellStock(relay.ClientIDMutation):
             'market_session': MarketSession.current().value,
             'action': OrderAction.SELL.value,
             'symbol': symbol,
+            'price_type': PriceType.LIMIT.value,
             'quantity': position_quantity,
             'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=Decimal('0.01'))
         }
@@ -226,6 +228,58 @@ class SellStock(relay.ClientIDMutation):
             length=20), preview_ids=preview_ids, **order_params)
 
         return SellStock()
+
+
+class PlaceStopLossError(graphene.Enum):
+    ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
+
+
+class PlaceStopLoss(relay.ClientIDMutation):
+    class Input:
+        provider_id = graphene.ID(required=True)
+        symbol = graphene.String(required=True)
+        account_id = graphene.ID()
+
+    error = graphene.Field(PlaceStopLossError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, symbol, provider_id, account_id=None):
+        account = Account.objects.get(id=account_id) if account_id else None
+        provider = ServiceProvider.objects.select_related('session') \
+            .get(id=provider_id)
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            return PlaceStopLoss(
+                error=PlaceStopLossError.ACCOUNT_NOT_PROVIDED,
+                error_message='Either specify an accountId that has a valid accountKey ' +
+                'or configure a default accountKey on the provider.'
+            )
+
+        etrade = Etrade(provider)
+        position_quantity = etrade.get_position_quantity(account_key, symbol)
+        last_price = etrade.get_ask_price(symbol)
+        stop_price = last_price - (last_price * Decimal('0.023'))
+
+        order_params = {
+            'account_key': account_key,
+            'market_session': MarketSession.current().value,
+            'action': OrderAction.SELL.value,
+            'symbol': symbol,
+            'price_type': PriceType.STOP_LIMIT.value,
+            'quantity': position_quantity,
+            'stop_price': stop_price,
+            'limit_price': get_limit_price(OrderAction.SELL, stop_price, margin=Decimal('0.01'))
+        }
+
+        preview_ids = etrade.preview_order(
+            order_client_id=get_random_string(length=20), **order_params)
+        etrade.place_order(order_client_id=get_random_string(
+            length=20), preview_ids=preview_ids, **order_params)
+
+        return PlaceStopLoss()
 
 
 class CancelOrderError(graphene.Enum):
@@ -346,5 +400,6 @@ class Mutation(graphene.ObjectType):
     sync_accounts = SyncAccounts.Field(required=True)
     buy_stock = BuyStock.Field(required=True)
     sell_stock = SellStock.Field(required=True)
+    place_stop_loss = PlaceStopLoss.Field(required=True)
     cancel_order = CancelOrder.Field(required=True)
     save_settings = SaveSettings.Field(required=True)

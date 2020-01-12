@@ -63,3 +63,9 @@ class MarketSession(enum.Enum):
             return MarketSession.REGULAR
 
         return MarketSession.EXTENDED
+
+
+class PriceType(enum.Enum):
+    LIMIT = "LIMIT"
+    STOP_LIMIT = "STOP_LIMIT"
+    MARKET = "MARKET"

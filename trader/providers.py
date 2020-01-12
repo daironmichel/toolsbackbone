@@ -241,13 +241,13 @@ class Etrade:
         return Decimal(str(quote.get("All").get("bid")))
 
     @staticmethod
-    def build_order_payload(market_session, action, symbol, limit_price, quantity):
+    def build_order_payload(market_session, action, symbol, price_type, limit_price, stop_price, quantity):
         return {
             "allOrNone": "false",
-            "priceType": "LIMIT",
+            "priceType": price_type,
             "orderTerm": "GOOD_FOR_DAY",
             "marketSession": market_session,
-            "stopPrice": "",
+            "stopPrice": str(stop_price),
             "limitPrice": str(limit_price),
             "Instrument": [
                 {
@@ -262,7 +262,8 @@ class Etrade:
             ]
         }
 
-    def preview_order(self, account_key, order_client_id, market_session, action, symbol, quantity, limit_price):
+    def preview_order(self, account_key, order_client_id, market_session, action,
+                      symbol, price_type, quantity, limit_price, stop_price=""):
         if len(str(order_client_id)) > 20:
             raise ValueError(
                 "Argument order_client_id is too long. Should be 20 characters or less.")
@@ -276,7 +277,8 @@ class Etrade:
                 "clientOrderId": str(order_client_id),
                 "Order": [
                     self.build_order_payload(
-                        market_session, action, symbol, limit_price, quantity)
+                        market_session, action, symbol, price_type,
+                        limit_price, stop_price, quantity)
                 ]
             }
         }
@@ -305,7 +307,7 @@ class Etrade:
         return preview_ids
 
     def place_order(self, account_key, preview_ids, order_client_id, market_session,
-                    action, symbol, quantity, limit_price):
+                    action, symbol, price_type, quantity, limit_price, stop_price=""):
         if len(str(order_client_id)) > 20:
             raise ValueError(
                 "Argument order_client_id is too long. Should be 20 characters or less.")
@@ -319,7 +321,8 @@ class Etrade:
                 "PreviewIds": [{"previewId": pid} for pid in preview_ids],
                 "Order": [
                     self.build_order_payload(
-                        market_session, action, symbol, limit_price, quantity)
+                        market_session, action, symbol, price_type,
+                        limit_price, stop_price, quantity)
                 ]
             }
         }

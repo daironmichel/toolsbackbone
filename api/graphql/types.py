@@ -192,8 +192,11 @@ class QuoteType(graphene.ObjectType):
 class OrderType(graphene.ObjectType):
     order_id = graphene.ID(required=True)
     symbol = graphene.String(required=True)
+    price_type = graphene.String(required=True)
     quantity = graphene.Int(required=True)
     limit_price = graphene.Decimal(required=True)
+    stop_price = graphene.Decimal()
+    stop_limit_price = graphene.Decimal()
     execution_price = graphene.Decimal(required=True)
     status = graphene.String(required=True)
     action = graphene.String(required=True)
@@ -212,6 +215,26 @@ class OrderType(graphene.ObjectType):
         if not symbol:
             raise ValueError(f'Expecting a value for symbol. Got: "{symbol}"')
         return instrument.get("Product").get("symbol")
+
+    def resolve_stop_price(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        stop_price = details.get("stopPrice")
+        if not stop_price and stop_price != 0:
+            return None
+        value = Decimal(str(stop_price))
+        if value.adjusted() > 0:
+            return value.quantize(Decimal('0.01'))
+        return value
+
+    def resolve_stop_limit_price(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        stop_limit_price = details.get("stopLimitPrice")
+        if not stop_limit_price and stop_limit_price != 0:
+            return None
+        value = Decimal(str(stop_limit_price))
+        if value.adjusted() > 0:
+            return value.quantize(Decimal('0.01'))
+        return value
 
     def resolve_quantity(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
