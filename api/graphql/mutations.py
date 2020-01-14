@@ -10,7 +10,7 @@ from api.graphql.types import (BrokerNode, ServiceProvider,
 from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import Account, ProviderSession, Settings, TradingStrategy
 from trader.providers import Etrade
-from trader.utils import get_limit_price
+from trader.utils import get_limit_price, get_round_price
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.api")
@@ -261,7 +261,8 @@ class PlaceStopLoss(relay.ClientIDMutation):
         etrade = Etrade(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_ask_price(symbol)
-        stop_price = last_price - (last_price * Decimal('0.023'))
+        stop_price = get_round_price(
+            last_price - (last_price * Decimal('0.023')))
 
         order_params = {
             'account_key': account_key,

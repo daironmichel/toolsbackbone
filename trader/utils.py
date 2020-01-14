@@ -17,3 +17,14 @@ def get_limit_price(action: OrderAction, price: Decimal, margin: Decimal) -> Dec
         limit_price = price + margin if action.buying() else price - margin
 
     return limit_price
+
+
+def get_round_price(price: Decimal) -> Decimal:
+    one_dollar = Decimal('1.00')
+    if price > one_dollar:
+        return price.quantize(Decimal('0.01'))
+
+    exponent = price.adjusted()
+    shifted = price.shift(abs(exponent))
+    rounded = shifted.quantize(Decimal('0.01'))
+    return rounded.scaleb(exponent)
