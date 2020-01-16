@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from trader.enums import OrderAction
-from trader.utils import get_limit_price
+from trader.utils import get_limit_price, get_round_price
 
 
 def test__get_limit_price__buy_under_one_dollar__adds_correct_margin():
@@ -40,3 +40,20 @@ def test__get_limit_price__sell_under_one_dollar__substracts_correct_margin():
     assert result2 == Decimal('0.0318')
     assert result3 == Decimal('0.00318')
     assert result4 == Decimal('0.98')
+
+
+def test_get_round_price__rounds_correctly():
+    price1 = Decimal('4.8373')
+    price2 = Decimal('0.48373')
+    price3 = Decimal('0.048373')
+    price4 = Decimal('4.8323')
+
+    result1 = get_round_price(price1)
+    result2 = get_round_price(price2)
+    result3 = get_round_price(price3)
+    result4 = get_round_price(price4)
+
+    assert result1 == Decimal('4.84')
+    assert result2 == Decimal('0.484')
+    assert result3 == Decimal('0.0484')
+    assert result4 == Decimal('4.83')

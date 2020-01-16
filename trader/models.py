@@ -5,6 +5,8 @@ from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils.text import slugify
 
+from trader.utils import get_round_price
+
 # Create your models here.
 
 
@@ -174,3 +176,44 @@ class ProviderSession(models.Model):
 
     def __str__(self):
         return f'<ProviderSession: {self.id}>'
+
+
+class AutoPilot(models.Model):
+    symbol = models.CharField(max_length=10)
+    strategy = models.ForeignKey(TradingStrategy, on_delete=models.PROTECT)
+    provider = models.ForeignKey(ServiceProvider, on_delete=models.PROTECT)
+    account = models.ForeignKey(Account, on_delete=models.PROTECT)
+
+    # Flag used to signal the auto pilot to sell the position asap
+    # even thought it hasn't hit the stop price
+    early_exit = models.BooleanField(default=False)
+
+    # price used for calculating the loss amount based on the strategy
+    # loss percentage. It will increase by the loss_percent amount when
+    # profit_percent + loss_percent is reached.
+    base_price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # price used to determine the stop price at which the position
+    # should be exited. It will increase by 1/2 loss_percent when
+    # that price level is held for a certain amount of time.
+    ref_price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # timestamp used to determine if ref_price should be moved up
+    # after certain amount of time have passed where the stock
+    # price is above the ref_price + 1/2 loss_amount
+    ref_time = models.DateTimeField()
+
+    def __str__(self):
+        return f'<AutoPilot: {self.id}, {self.symbol}>'
+
+    @property
+    def loss_amount(self) -> Decimal:
+        return get_round_price(self.base_price * (self.strategy.loss_percent / Decimal('100')))
+
+    @property
+    def profit_amount(self) -> Decimal:
+        return get_round_price(self.base_price * (self.strategy.profit_percent / Decimal('100')))
+
+    @property
+    def stop_price(self) -> Decimal:
+        return get_round_price(self.ref_price - self.loss_amount)
