@@ -18,9 +18,7 @@ graphene-django = "*"
 django-rest-auth = "*"
 rauth = "*"
 redis = "*"
-celery = "*"
-django-celery-results = "*"
-httpx = "==0.11"
+httpx = "==0.11.1"
 
 [requires]
 python_version = "3.7"

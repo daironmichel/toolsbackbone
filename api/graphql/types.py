@@ -7,7 +7,7 @@ from graphene_django.types import DjangoObjectType
 
 from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
                            Settings, TradingStrategy)
-from trader.providers import Etrade
+from trader.providers import Etrade, get_provider_instance
 
 from .graphene_overrides import NonNullConnection
 
@@ -86,7 +86,7 @@ class ServiceProviderNode(DjangoObjectType):
         if not session:
             return ProviderSession.CLOSED
 
-        etrade = Etrade(self)
+        etrade = get_provider_instance(self)
         if self.session and not etrade.is_session_active():
             self.session.delete()
             self.session = None
@@ -96,7 +96,7 @@ class ServiceProviderNode(DjangoObjectType):
         return self.session.status
 
     def resolve_quote(self, info, symbol):
-        etrade = Etrade(self)
+        etrade = get_provider_instance(self)
         quote_data = etrade.get_quote(symbol)
 
         if not quote_data:
@@ -498,7 +498,7 @@ class ViewerType(graphene.ObjectType):
                 'Either specify accountId argument or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         return etrade.get_orders(account_key) or []
 
     def resolve_positions(self, info, provider_id, account_id=None, **kwargs):
@@ -514,7 +514,7 @@ class ViewerType(graphene.ObjectType):
                 'Either specify accountId argument or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         return etrade.get_positions(account_key) or []
 
     def resolve_transactions(self, info, provider_id, account_id=None, **kwargs):
@@ -530,7 +530,7 @@ class ViewerType(graphene.ObjectType):
                 'Either specify accountId argument or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         return etrade.get_transactions(account_key) or []
 
     def resolve_performances(self, info, provider_id, account_id=None, **kwargs):
@@ -546,7 +546,7 @@ class ViewerType(graphene.ObjectType):
                 'Either specify accountId argument or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         transactions = etrade.get_transactions(account_key) or []
 
         symbol_map = {}

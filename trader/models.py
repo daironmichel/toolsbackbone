@@ -149,6 +149,14 @@ class ServiceProvider(models.Model):
         self.slug = slugify(self.name)
         super().save(force_insert, force_update, using, update_fields)
 
+    def get_session_token(self):
+        config_session = ProviderSession.objects.filter(
+            provider=self).first()
+        if not config_session:
+            return None
+        return (config_session.access_token,
+                config_session.access_token_secret)
+
 
 class ProviderSession(models.Model):
     REQUESTING = 0
@@ -178,15 +186,38 @@ class ProviderSession(models.Model):
         return f'<ProviderSession: {self.id}>'
 
 
-class AutoPilot(models.Model):
-    symbol = models.CharField(max_length=10)
-    strategy = models.ForeignKey(TradingStrategy, on_delete=models.PROTECT)
-    provider = models.ForeignKey(ServiceProvider, on_delete=models.PROTECT)
-    account = models.ForeignKey(Account, on_delete=models.PROTECT)
+class AutoPilotTask(models.Model):
+    CREATED = 0
+    QUEUED = 1
+    RUNNING = 2
+    DONE = 3
+    TASK_STATUS = [
+        (CREATED, "Created"),
+        (QUEUED, "Queued"),
+        (RUNNING, "Running"),
+        (DONE, "Done"),
+    ]
 
-    # Flag used to signal the auto pilot to sell the position asap
-    # even thought it hasn't hit the stop price
-    early_exit = models.BooleanField(default=False)
+    # Signals used to force behavior of the task
+    AUTO = 0  # task will handle position automatically (default)
+    MANUAL_OVERRIDE = 1  # task will shutdown. position will remain as is
+    SELL = 2  # task will sell position asap
+    SIGNALS = [
+        (AUTO, "Auto Driving"),
+        (MANUAL_OVERRIDE, "Manual Override"),
+        (SELL, "Sell Position"),
+    ]
+
+    status = models.SmallIntegerField(choices=TASK_STATUS, default=CREATED)
+    signal = models.SmallIntegerField(choices=SIGNALS, default=AUTO)
+    symbol = models.CharField(max_length=10)
+    strategy = models.ForeignKey(
+        TradingStrategy, on_delete=models.PROTECT, related_name='+')
+    provider = models.ForeignKey(
+        ServiceProvider, on_delete=models.PROTECT, related_name='+')
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, related_name='+')
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='+')
 
     # price used for calculating the loss amount based on the strategy
     # loss percentage. It will increase by the loss_percent amount when
@@ -204,7 +235,7 @@ class AutoPilot(models.Model):
     ref_time = models.DateTimeField()
 
     def __str__(self):
-        return f'<AutoPilot: {self.id}, {self.symbol}>'
+        return f'<AutoPilotTask: {self.id}, {self.symbol}, user:{self.user_id}>'
 
     @property
     def loss_amount(self) -> Decimal:

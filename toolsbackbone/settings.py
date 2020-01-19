@@ -48,7 +48,6 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_auth',
     'graphene_django',
-    'django_celery_results',
     'api',
     'trader'
 ]
@@ -160,32 +159,55 @@ LOGGING = {
             'datefmt': '%Y-%m-%d %H:%M:%S'
         },
         'simple': {
-            'format': '%(levelname)s %(message)s'
+            'format': '[%(levelname)s] %(message)s'
         }
     },
     'handlers': {
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler'
+        'heroku': {
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
+            'handlers': ['heroku'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
-        'trader.api': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'formatter': 'verbose',
-            'propagate': True,
+        'django.db': {
+            'handlers': ['heroku'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO') if bool(
+                strtobool(os.getenv('DJANGO_LOG_DB', 'false'))) else 'INFO',
+            'propagate': False,
         },
-        'trader.providers': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'formatter': 'verbose',
-            'propagate': True,
-        }
+        'trader': {
+            'handlers': ['heroku'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        },
+        # 'trader.api': {
+        #     'handlers': ['console'],
+        #     'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        #     'formatter': 'verbose',
+        #     'propagate': True,
+        # },
+        # 'trader.providers': {
+        #     'handlers': ['console'],
+        #     'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        #     'formatter': 'verbose',
+        #     'propagate': True,
+        # },
+        # 'trader.aio.providers': {
+        #     'handlers': ['console'],
+        #     'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        #     'formatter': 'verbose',
+        #     'propagate': True,
+        # },
+        # 'trader.autopilot': {
+        #     'handlers': ['console'],
+        #     'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+        #     'formatter': 'verbose',
+        #     'propagate': True,
+        # }
     },
 }
 
@@ -226,17 +248,10 @@ GRAPHENE = {
 
 
 # ---------------------------
-# Celery Settings
+# Misc. Settings
 # ---------------------------
 
-CELERY_BROKER_URL = os.environ.get('CLOUDAMQP_URL')
-CELERY_RESULT_BACKEND = os.environ.get(
-    'DJANGO_CELERY_RESULT_BACKEND', 'django-db')
-CELERY_BROKER_POOL_LIMIT = int(os.environ.get(
-    'DJANGO_CELERY_BROKER_POOL_LIMIT', 1))
-CELERY_TASK_ALWAYS_EAGER = strtobool(os.environ.get(
-    'DJANGO_CELERY_TASK_ALWAYS_EAGER', 'false'))
-
+AUTOPILOT_CAPACITY = int(os.getenv('DJANGO_AUTOPILOT_CAPACITY', '5'))
 
 # ---------------------------
 # Heroku settings
@@ -244,4 +259,4 @@ CELERY_TASK_ALWAYS_EAGER = strtobool(os.environ.get(
 
 # This should always be the last line
 django_heroku.settings(locals(), logging=not bool(
-    strtobool(os.environ.get('DJANGO_LOGGING', 'false'))))
+    strtobool(os.getenv('DJANGO_LOGGING', 'false'))))

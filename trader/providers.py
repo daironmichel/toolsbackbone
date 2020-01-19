@@ -13,17 +13,22 @@ from .models import Account, ProviderSession, ServiceProvider
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.providers")
-testlogger = logging.getLogger("testLogger")
-djangologger = logging.getLogger("django")
-toolslogger = logging.getLogger("toolsbackbone")
+# testlogger = logging.getLogger("testLogger")
+# djangologger = logging.getLogger("django")
+# toolslogger = logging.getLogger("toolsbackbone")
 
 
 class ServiceError(Exception):
     pass
 
 
+def get_provider_instance(config: ServiceProvider):
+    access_token, access_token_secret = config.get_session_token() or (None, None)
+    return Etrade(config, access_token, access_token_secret)
+
+
 class Etrade:
-    def __init__(self, config: ServiceProvider):
+    def __init__(self, config: ServiceProvider, access_token=None, access_token_secret=None):
         self.config = config
         self._service = OAuth1Service(
             name=config.name,
@@ -35,15 +40,17 @@ class Etrade:
             base_url=config.base_url
         )
 
-        config_session = ProviderSession.objects.filter(
-            provider=self.config).first()
-        if config_session:
-            token = (config_session.access_token,
-                     config_session.access_token_secret)
-            self.session = self._service.get_session(token)
+        if access_token and access_token_secret:
+            self.session = self._service.get_session(
+                token=(access_token, access_token_secret))
 
-    def request(self, endpoint: str, method: str = "GET", **kwargs):
-        url = self._service.base_url
+    def _update_session_refreshed_date(self):
+        # etrade session goes inactive if no requests made for two hours
+        # so we update session.refreshed timestamp here to keep track
+        self.config.session.save()
+
+    def _prepare_request(self, method, endpoint, **kwargs):
+        url = self.config.base_url
         if not url.endswith('/'):
             url += '/'
         if endpoint.startswith('/'):
@@ -55,28 +62,37 @@ class Etrade:
         if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
             logger.debug('%s %s: \n%s %s \nkwargs: %s', self.config.broker.name,
                          self.config.name, method, url, json.dumps(kwargs, indent=2, sort_keys=True))
+        return url
 
-        if method.upper() == "GET":
-            response = self.session.get(url, header_auth=True, **kwargs)
-        elif method.upper() == "POST":
-            response = self.session.post(url, header_auth=True, **kwargs)
-        elif method.upper() == "PUT":
-            response = self.session.put(url, header_auth=True, **kwargs)
-        elif method.upper() == "DELETE":
-            response = self.session.delete(url, header_auth=True, **kwargs)
-        else:
-            raise NotImplementedError(
-                f'Method {method.upper()} is not implemented.')
-
+    def _process_response(self, response):
         if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
             logger.debug('Response: %s \n%s', response.status_code,
                          json.dumps(response.content.decode('utf-8'), indent=2, sort_keys=True))
 
+    def request(self, method: str, endpoint: str, realm='', **kwargs):
+        url = self._prepare_request(method, endpoint, **kwargs)
+
+        response = self.session.request(
+            method, url, header_auth=True, **kwargs)
+
+        self._process_response(response)
         if response.status_code == 200:
             # etrade session goes inactive if no requests made for two hours
             # so we update session.refreshed timestamp here to keep track
-            self.config.session.save()
+            self._update_session_refreshed_date()
         return response
+
+    def get(self, endpoint: str, **kwargs):
+        return self.request("GET", endpoint, **kwargs)
+
+    def post(self, endpoint: str, **kwargs):
+        return self.request("POST", endpoint, **kwargs)
+
+    def put(self, endpoint: str, **kwargs):
+        return self.request("PUT", endpoint, **kwargs)
+
+    def delete(self, endpoint: str, **kwargs):
+        return self.request("DELETE", endpoint, **kwargs)
 
     def get_authorize_url(self) -> str:
         service = self._service
@@ -132,7 +148,7 @@ class Etrade:
 
     def get_accounts(self) -> dict:
         # request accounts
-        response = self.request('/accounts/list.json')
+        response = self.get('/accounts/list.json')
 
         data = response.json() if response.content else {}
         if not data:
@@ -152,8 +168,8 @@ class Etrade:
             "instType": institution_type,
             "realTimeNAV": "true"
         }
-        response = self.request(f'/accounts/{account_key}/balance.json',
-                                params=params, headers=headers)
+        response = self.get(f'/accounts/{account_key}/balance.json',
+                            params=params, headers=headers)
 
         data = response.json() if response.content else {}
 
@@ -198,8 +214,7 @@ class Etrade:
                 'marginBuyingPower', 0)))
             account.save()
 
-    def get_quote(self, symbol):
-        response = self.request(f'/market/quote/{symbol}.json')
+    def _process_get_quote_response(self, response):
         data = response.json() if response.content else {}
 
         if response.status_code != 200:
@@ -227,6 +242,10 @@ class Etrade:
             logger.warning('Messages recieved from quote.', extra=data)
 
         return quotes[0]
+
+    def get_quote(self, symbol):
+        response = self.get(f'/market/quote/{symbol}.json')
+        return self._process_get_quote_response(response)
 
     def get_last_trade_price(self, symbol: str) -> Decimal:
         quote = self.get_quote(symbol)
@@ -284,8 +303,10 @@ class Etrade:
         }
 
         # payload = json.dumps(payload)
-        response = self.request(
-            f'/accounts/{account_key}/orders/preview.json', headers=headers, data=json.dumps(payload), method="POST")
+        response = self.post(
+            f'/accounts/{account_key}/orders/preview.json',
+            headers=headers,
+            data=json.dumps(payload))
 
         data = response.json() if response.content else {}
 
@@ -327,8 +348,10 @@ class Etrade:
             }
         }
 
-        response = self.request(
-            f'/accounts/{account_key}/orders/place.json', headers=headers, data=json.dumps(payload), method="POST")
+        response = self.post(
+            f'/accounts/{account_key}/orders/place.json',
+            headers=headers,
+            data=json.dumps(payload))
 
         data = response.json() if response.content else {}
 
@@ -353,7 +376,7 @@ class Etrade:
     def get_order_details(self, account_key, order_id, symbol):
         params = {"symbol": symbol}
         headers = {"consumerkey": self.config.consumer_key}
-        response = self.request(
+        response = self.get(
             f'/accounts/{account_key}/orders.json', params=params, headers=headers)
 
         if response.status_code == 204:
@@ -382,7 +405,7 @@ class Etrade:
         if not to_date:
             params['toDate'] = now.strftime("%m%d%Y")
 
-        response = self.request(
+        response = self.get(
             f'/accounts/{account_key}/orders.json', params=params)
 
         if response.status_code == 204:
@@ -411,8 +434,8 @@ class Etrade:
         }
 
         payload = json.dumps(payload)
-        response = self.request(
-            f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload, method="PUT")
+        response = self.put(
+            f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload)
 
         data = response.json() if response.content else {}
 
@@ -427,7 +450,7 @@ class Etrade:
         return True
 
     def get_positions(self, account_key):
-        response = self.request(f'/accounts/{account_key}/portfolio.json')
+        response = self.get(f'/accounts/{account_key}/portfolio.json')
 
         if response.status_code == 204:
             return None  # None Found
@@ -469,7 +492,7 @@ class Etrade:
         if not to_date:
             params['toDate'] = now.strftime("%m%d%Y")
 
-        response = self.request(f'/accounts/{account_key}/transactions.json')
+        response = self.get(f'/accounts/{account_key}/transactions.json')
 
         if response.status_code == 204:
             return None  # None Found

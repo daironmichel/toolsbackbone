@@ -1,12 +1,12 @@
 from decimal import Decimal
 
-from trader.models import AutoPilot, TradingStrategy
+from trader.models import AutoPilotTask, TradingStrategy
 
 
 class TestAutoPilot:
     def test_loss_amount__returns_correct_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
-        auto_pilot = AutoPilot(strategy=strat, base_price=Decimal('100'))
+        auto_pilot = AutoPilotTask(strategy=strat, base_price=Decimal('100'))
 
         loss_amount = auto_pilot.loss_amount
 
@@ -14,9 +14,12 @@ class TestAutoPilot:
 
     def test_loss_amount__returns_rounded_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
-        auto_pilot1 = AutoPilot(strategy=strat, base_price=Decimal('4.5324'))
-        auto_pilot2 = AutoPilot(strategy=strat, base_price=Decimal('0.45324'))
-        auto_pilot3 = AutoPilot(strategy=strat, base_price=Decimal('0.045324'))
+        auto_pilot1 = AutoPilotTask(
+            strategy=strat, base_price=Decimal('4.5324'))
+        auto_pilot2 = AutoPilotTask(
+            strategy=strat, base_price=Decimal('0.45324'))
+        auto_pilot3 = AutoPilotTask(
+            strategy=strat, base_price=Decimal('0.045324'))
 
         loss_amount1 = auto_pilot1.loss_amount
         loss_amount2 = auto_pilot2.loss_amount
@@ -28,7 +31,7 @@ class TestAutoPilot:
 
     def test_profit_amount__returns_correct_value(self):
         strat = TradingStrategy(profit_percent=Decimal('8'))
-        auto_pilot = AutoPilot(strategy=strat, base_price=Decimal('100'))
+        auto_pilot = AutoPilotTask(strategy=strat, base_price=Decimal('100'))
 
         profit_amount = auto_pilot.profit_amount
 
@@ -36,9 +39,12 @@ class TestAutoPilot:
 
     def test_profit_amount__returns_rounded_value(self):
         strat = TradingStrategy(profit_percent=Decimal('8'))
-        auto_pilot1 = AutoPilot(strategy=strat, base_price=Decimal('4.5324'))
-        auto_pilot2 = AutoPilot(strategy=strat, base_price=Decimal('0.45324'))
-        auto_pilot3 = AutoPilot(strategy=strat, base_price=Decimal('0.045324'))
+        auto_pilot1 = AutoPilotTask(
+            strategy=strat, base_price=Decimal('4.5324'))
+        auto_pilot2 = AutoPilotTask(
+            strategy=strat, base_price=Decimal('0.45324'))
+        auto_pilot3 = AutoPilotTask(
+            strategy=strat, base_price=Decimal('0.045324'))
 
         profit_amount1 = auto_pilot1.profit_amount
         profit_amount2 = auto_pilot2.profit_amount
@@ -50,7 +56,7 @@ class TestAutoPilot:
 
     def test_stop_price__returns_correct_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
-        auto_pilot = AutoPilot(
+        auto_pilot = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('10'),
             ref_price=Decimal('10'))
@@ -61,15 +67,15 @@ class TestAutoPilot:
 
     def test_stop_price__returns_rounded_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
-        auto_pilot1 = AutoPilot(
+        auto_pilot1 = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('4.5324'),
             ref_price=Decimal('10'))
-        auto_pilot2 = AutoPilot(
+        auto_pilot2 = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('0.45324'),
             ref_price=Decimal('1'))
-        auto_pilot3 = AutoPilot(
+        auto_pilot3 = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('0.045324'),
             ref_price=Decimal('0.1'))

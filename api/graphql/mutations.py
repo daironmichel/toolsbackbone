@@ -9,7 +9,7 @@ from api.graphql.types import (BrokerNode, ServiceProvider,
                                ServiceProviderNode, SettingsNode)
 from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import Account, ProviderSession, Settings, TradingStrategy
-from trader.providers import Etrade
+from trader.providers import get_provider_instance
 from trader.utils import get_limit_price, get_round_price
 
 # pylint: disable=invalid-name
@@ -42,7 +42,7 @@ class ConnectProvider(relay.ClientIDMutation):
                 error_message="Sorry! the provider you're trying to connect to was not found."
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         authorize_url = etrade.get_authorize_url()
 
         return ConnectProvider(service_provider=provider, authorize_url=authorize_url,
@@ -79,7 +79,7 @@ class AuthorizeConnection(relay.ClientIDMutation):
             return AuthorizeConnection(error=AuthorizeConnectionError.INCOMPATIBLE_STATE,
                                        error_message="Session state is not compatible. Try starting a new connection.")
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         provider = etrade.authorize(oauth_verifier)
 
         return AuthorizeConnection(service_provider=provider)
@@ -109,7 +109,7 @@ class SyncAccounts(relay.ClientIDMutation):
             return AuthorizeConnection(error=SyncAccounts.PROVIDER_NOT_FOUND,
                                        error_message="Pending session not found. Try starting a new connection.")
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         etrade.sync_accounts()
 
         default_account = Account.objects.filter(
@@ -155,7 +155,7 @@ class BuyStock(relay.ClientIDMutation):
         if not account:
             account = Account.objects.get(account_key=account_key)
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         last_price = etrade.get_bid_price(symbol)
 
         limit_price = get_limit_price(OrderAction.BUY, last_price,
@@ -208,7 +208,7 @@ class SellStock(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_ask_price(symbol)
 
@@ -258,7 +258,7 @@ class PlaceStopLoss(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_ask_price(symbol)
         stop_price = get_round_price(
@@ -311,7 +311,7 @@ class CancelOrder(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
-        etrade = Etrade(provider)
+        etrade = get_provider_instance(provider)
         etrade.cancel_order(
             account_key=account_key,
             order_id=order_id
