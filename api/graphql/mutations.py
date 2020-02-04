@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from decimal import Decimal
 
 import graphene
@@ -8,12 +9,29 @@ from graphene import relay
 from api.graphql.types import (BrokerNode, ServiceProvider,
                                ServiceProviderNode, SettingsNode)
 from trader.enums import MarketSession, OrderAction, PriceType
-from trader.models import Account, ProviderSession, Settings, TradingStrategy
+from trader.models import (Account, AutoPilotTask, ProviderSession, Settings,
+                           TradingStrategy)
 from trader.providers import get_provider_instance
 from trader.utils import get_limit_price, get_round_price
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.api")
+
+
+def get_autopilot(user_id: int, symbol: str) -> AutoPilotTask:
+    return AutoPilotTask.objects.filter(
+        user_id=user_id, symbol=symbol).first()
+
+
+def turn_off_autopilot(user_id: int, symbol: str) -> bool:
+    autopilot = get_autopilot(user_id, symbol)
+
+    if not autopilot:
+        return False
+
+    autopilot.signal = AutoPilotTask.MANUAL_OVERRIDE
+    autopilot.save()
+    return True
 
 
 class ConnectProviderError(graphene.Enum):
@@ -52,12 +70,14 @@ class ConnectProvider(relay.ClientIDMutation):
 class AuthorizeConnectionError(graphene.Enum):
     PROVIDER_NOT_FOUND = 'PROVIDER_NOT_FOUND'
     INCOMPATIBLE_STATE = 'INCOMPATIBLE_STATE'
+    MISSING_REQUIRED_FIELD = 'MISSING_REQUIRED_FIELD'
 
 
 class AuthorizeConnection(relay.ClientIDMutation):
     class Input:
-        provider_id = graphene.ID(required=True)
         oauth_verifier = graphene.String(required=True)
+        oauth_token = graphene.String()
+        provider_id = graphene.ID()
 
     service_provider = graphene.Field(ServiceProviderNode)
 
@@ -65,11 +85,22 @@ class AuthorizeConnection(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, provider_id, oauth_verifier):
-        provider = info.context.user.service_providers \
-            .filter(id=provider_id) \
-            .select_related('session') \
-            .first()
+    def mutate_and_get_payload(cls, root, info, oauth_verifier,
+                               oauth_token=None, provider_id=None):
+        if not oauth_token and not provider_id:
+            return AuthorizeConnection(error=AuthorizeConnectionError.MISSING_REQUIRED_FIELD,
+                                       error_message="Provide oath_token or provider_id")
+
+        if oauth_token:
+            provider = info.context.user.service_providers \
+                .filter(session__request_token=oauth_token) \
+                .select_related('session') \
+                .first()
+        else:
+            provider = info.context.user.service_providers \
+                .filter(id=provider_id) \
+                .select_related('session') \
+                .first()
 
         if not provider:
             return AuthorizeConnection(error=AuthorizeConnectionError.SESSION_NOT_FOUND,
@@ -131,13 +162,16 @@ class BuyStock(relay.ClientIDMutation):
         provider_id = graphene.ID(required=True)
         strategy_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
+        price = graphene.Decimal()
         account_id = graphene.ID()
+        autopilot = graphene.Boolean()
 
     error = graphene.Field(BuyStockError)
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, symbol, strategy_id, provider_id, account_id=None):
+    def mutate_and_get_payload(cls, root, info, symbol, strategy_id, provider_id,
+                               price=0, account_id=None, autopilot=False):
         strategy = TradingStrategy.objects.get(id=strategy_id)
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
@@ -155,11 +189,29 @@ class BuyStock(relay.ClientIDMutation):
         if not account:
             account = Account.objects.get(account_key=account_key)
 
+        if autopilot:
+            task = AutoPilotTask(
+                signal=AutoPilotTask.BUY,
+                user=info.context.user,
+                strategy=strategy,
+                provider=provider,
+                account=account,
+                symbol=symbol,
+                quantity=0,
+                entry_price=price,
+                base_price=price,
+                ref_price=price,
+                ref_time=datetime.now)
+            task.save()
+            return BuyStock()
+
         etrade = get_provider_instance(provider)
-        last_price = etrade.get_bid_price(symbol)
+        last_price = Decimal(price) if price else etrade.get_bid_price(symbol)
 
         limit_price = get_limit_price(OrderAction.BUY, last_price,
                                       strategy.price_margin)
+        quantity = strategy.get_quantity_for(
+            buying_power=account.cash_buying_power, price_per_share=last_price)
 
         order_params = {
             'account_key': account_key,
@@ -167,8 +219,7 @@ class BuyStock(relay.ClientIDMutation):
             'action': OrderAction.BUY.value,
             'symbol': symbol,
             'price_type': PriceType.LIMIT.value,
-            'quantity': strategy.get_quantity_for(
-                buying_power=account.cash_buying_power, price_per_share=last_price),
+            'quantity': quantity,
             'limit_price': limit_price
         }
 
@@ -208,6 +259,8 @@ class SellStock(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
+        turn_off_autopilot(info.context.user.id, symbol)
+
         etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_ask_price(symbol)
@@ -232,6 +285,7 @@ class SellStock(relay.ClientIDMutation):
 
 class PlaceStopLossError(graphene.Enum):
     ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
+    NOT_ALLOWED_ON_AUTOPILOT = 'NOT_ALLOWED_ON_AUTOPILOT'
 
 
 class PlaceStopLoss(relay.ClientIDMutation):
@@ -258,11 +312,20 @@ class PlaceStopLoss(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
+        autopilot = get_autopilot(info.context.user.id, symbol)
+        if autopilot:
+            return PlaceStopLoss(
+                error=PlaceStopLossError.NOT_ALLOWED_ON_AUTOPILOT,
+                error_message='You must turn off autopilot first.'
+            )
+
         etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
         last_price = etrade.get_ask_price(symbol)
         stop_price = get_round_price(
             last_price - (last_price * Decimal('0.023')))
+        limit_price = get_limit_price(
+            OrderAction.SELL, stop_price, margin=Decimal('0.01'))
 
         order_params = {
             'account_key': account_key,
@@ -272,7 +335,7 @@ class PlaceStopLoss(relay.ClientIDMutation):
             'price_type': PriceType.STOP_LIMIT.value,
             'quantity': position_quantity,
             'stop_price': stop_price,
-            'limit_price': get_limit_price(OrderAction.SELL, stop_price, margin=Decimal('0.01'))
+            'limit_price': limit_price
         }
 
         preview_ids = etrade.preview_order(
@@ -395,6 +458,125 @@ class SaveSettings(relay.ClientIDMutation):
         return SaveSettings(settings=settings)
 
 
+class AutoPilotONError(graphene.Enum):
+    PROVIDER_REQUIRED = 'PROVIDER_REQUIRED'
+    ACCOUNT_REQUIRED = 'ACCOUNT_REQUIRED'
+    STRATEGY_REQUIRED = 'STRATEGY_REQUIRED'
+    NO_POSITION_FOR_SYMBOL = 'NO_POSITION_FOR_SYMBOL'
+
+
+class AutoPilotON(relay.ClientIDMutation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._settings = None
+
+    class Input:
+        symbol = graphene.String(required=True)
+        strategy_id = graphene.ID()
+        provider_id = graphene.ID()
+        account_id = graphene.ID()
+
+    error = graphene.Field(AutoPilotONError)
+    error_message = graphene.String()
+
+    def _get_settings(self, user):
+        if not self._settings:
+            self._settings = Settings.objects.filter(user_id=user.id) \
+                .select_related('default_stategy', 'default_broker__default_provider') \
+                .first()
+        return self._settings
+
+    def get_default_strategy(self, user):
+        settings = self._get_settings(user)
+        if not settings:
+            return None
+        return settings.default_strategy
+
+    def get_default_provider(self, user):
+        settings = self._get_settings(user)
+        if not settings:
+            return None
+        return settings.default_broker.default_provider
+
+    def get_default_account(self, user):
+        settings = self._get_settings(user)
+        if not settings:
+            return None
+        default_provider = self._default_provider(user)
+        if not default_provider:
+            return None
+        return Account.objects.filter(account_key=default_provider.account_key)
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, symbol, strategy_id=None,
+                               provider_id=None, account_id=None):
+
+        user = info.context.user
+
+        strategy = user.strategies.get(
+            id=strategy_id) if strategy_id else root.get_default_strategy(user)
+        if not strategy:
+            return AutoPilotON(error=AutoPilotONError.STRATEGY_REQUIRED,
+                               error_message='Either set the strategy_id param or configure a default.')
+
+        provider = user.providers.get(
+            id=provider_id) if provider_id else root.get_default_privider(user)
+        if not provider:
+            return AutoPilotON(error=AutoPilotONError.PROVIDER_REQUIRED,
+                               error_message='Either set the provider_id param or configure a default.')
+
+        account = user.accounts.get(
+            id=account_id) if account_id else root.get_default_account(user)
+        if not account:
+            return AutoPilotON(error=AutoPilotONError.ACCOUNT_REQUIRED,
+                               error_message='Either set the account_id param or configure a default.')
+
+        etrade = get_provider_instance(provider)
+        quantity, entry_price = etrade.get_position(account.symbol, symbol)
+        if not quantity or not entry_price:
+            return AutoPilotON(error=AutoPilotONError.NO_POSITION_FOR_SYMBOL,
+                               error_message=f'No position found for {symbol}. Position: {quantity}@{entry_price}')
+
+        task = AutoPilotTask(
+            user=user,
+            strategy=strategy,
+            provider=provider,
+            account=account,
+            symbol=symbol,
+            quantity=quantity,
+            entry_price=entry_price,
+            base_price=entry_price,
+            ref_price=entry_price,
+            ref_time=datetime.now)
+
+        task.save()
+        return AutoPilotON()
+
+
+class AutoPilotOFFError(graphene.Enum):
+    NO_AUTOPILOT = 'NO_AUTOPILOT'
+
+
+class AutoPilotOFF(relay.ClientIDMutation):
+    class Input:
+        symbol = graphene.String(required=True)
+
+    error = graphene.Field(AutoPilotOFFError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, symbol):
+        user = info.context.user
+
+        success = turn_off_autopilot(user.id, symbol)
+
+        if not success:
+            return AutoPilotOFF(error=AutoPilotOFFError.NO_AUTOPILOT,
+                                error_message=f'No autopilot active for {symbol}')
+
+        return AutoPilotOFF()
+
+
 class Mutation(graphene.ObjectType):
     connect_provider = ConnectProvider.Field(required=True)
     authorize_connection = AuthorizeConnection.Field(required=True)
@@ -404,3 +586,5 @@ class Mutation(graphene.ObjectType):
     place_stop_loss = PlaceStopLoss.Field(required=True)
     cancel_order = CancelOrder.Field(required=True)
     save_settings = SaveSettings.Field(required=True)
+    autopilot_ON = AutoPilotON.Field(required=True)
+    autopilot_OFF = AutoPilotOFF.Field(required=True)

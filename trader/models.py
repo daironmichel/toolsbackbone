@@ -157,6 +157,10 @@ class ServiceProvider(models.Model):
         return (config_session.access_token,
                 config_session.access_token_secret)
 
+    def get_stored_session(self):
+        return ProviderSession.objects.filter(
+            provider=self).first()
+
 
 class ProviderSession(models.Model):
     REQUESTING = 0
@@ -187,7 +191,7 @@ class ProviderSession(models.Model):
 
 
 class AutoPilotTask(models.Model):
-    CREATED = 0
+    CREATED = 0  # default
     QUEUED = 1
     RUNNING = 2
     DONE = 3
@@ -201,23 +205,53 @@ class AutoPilotTask(models.Model):
     # Signals used to force behavior of the task
     AUTO = 0  # task will handle position automatically (default)
     MANUAL_OVERRIDE = 1  # task will shutdown. position will remain as is
-    SELL = 2  # task will sell position asap
+    BUY = 2  # task will buy position asap using the strategy
+    SELL = 3  # task will sell position asap
     SIGNALS = [
         (AUTO, "Auto Driving"),
         (MANUAL_OVERRIDE, "Manual Override"),
+        (BUY, "Buy Symbol"),
         (SELL, "Sell Position"),
+    ]
+
+    # current mode the autopilot task consumer is in
+    BUYING = 0
+    WATCHING = 1  # default
+    SELLING = 2
+    STATES = [
+        (BUYING, "Buying Mode"),
+        (WATCHING, "Watching Mode"),
+        (SELLING, "Selling Mode"),
+    ]
+
+    # modifiers that determine the behabior towards profit/loss
+    FOLLOW_STRATEGY = 0  # follow strategy as is (default)
+    MAXIMIZE_PROFIT = 1  # try to get the most profit by moving up the stop price
+    MINIMIZE_LOSS = 2  # try to at least brake even and have a smaller loss threshold
+    MODS = [
+        (FOLLOW_STRATEGY, "Follow Strategy"),
+        (MAXIMIZE_PROFIT, "Maximize Profit"),
+        (MINIMIZE_LOSS, "Minimize Loss"),
     ]
 
     status = models.SmallIntegerField(choices=TASK_STATUS, default=CREATED)
     signal = models.SmallIntegerField(choices=SIGNALS, default=AUTO)
-    symbol = models.CharField(max_length=10)
+    state = models.SmallIntegerField(choices=STATES, default=WATCHING)
+    modifier = models.SmallIntegerField(choices=MODS, default=FOLLOW_STRATEGY)
+
     strategy = models.ForeignKey(
         TradingStrategy, on_delete=models.PROTECT, related_name='+')
     provider = models.ForeignKey(
         ServiceProvider, on_delete=models.PROTECT, related_name='+')
     account = models.ForeignKey(
         Account, on_delete=models.PROTECT, related_name='+')
-    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='+')
+    user = models.ForeignKey(
+        User, on_delete=models.PROTECT, related_name='+')
+
+    symbol = models.CharField(max_length=10)
+    quantity = models.IntegerField(default=0, blank=True)
+    entry_price = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, blank=True)
 
     # price used for calculating the loss amount based on the strategy
     # loss percentage. It will increase by the loss_percent amount when

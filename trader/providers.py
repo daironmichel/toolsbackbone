@@ -23,14 +23,16 @@ class ServiceError(Exception):
 
 
 def get_provider_instance(config: ServiceProvider):
-    access_token, access_token_secret = config.get_session_token() or (None, None)
-    return Etrade(config, access_token, access_token_secret)
+    return Etrade(config, config.get_stored_session())
 
 
 class Etrade:
-    def __init__(self, config: ServiceProvider, access_token=None, access_token_secret=None):
+    def __init__(self, config: ServiceProvider, stored_session: ProviderSession = None):
+        self.name = f'etrade.{config.name.lower()}'
+        self.log_prefix = f'[{self.name}]'
         self.config = config
-        self._service = OAuth1Service(
+        self.stored_session = stored_session
+        self.service = OAuth1Service(
             name=config.name,
             consumer_key=config.consumer_key,
             consumer_secret=config.consumer_secret,
@@ -40,16 +42,17 @@ class Etrade:
             base_url=config.base_url
         )
 
-        if access_token and access_token_secret:
-            self.session = self._service.get_session(
-                token=(access_token, access_token_secret))
+        self.session = None
+        if stored_session and stored_session.access_token and stored_session.access_token_secret:
+            self.session = self.service.get_session(
+                token=(stored_session.access_token, stored_session.access_token_secret))
 
     def _update_session_refreshed_date(self):
         # etrade session goes inactive if no requests made for two hours
         # so we update session.refreshed timestamp here to keep track
         self.config.session.save()
 
-    def _prepare_request(self, method, endpoint, **kwargs):
+    def _get_request_url(self, method, endpoint, **kwargs):
         url = self.config.base_url
         if not url.endswith('/'):
             url += '/'
@@ -58,24 +61,30 @@ class Etrade:
         else:
             url += endpoint
 
-        # to make the code more efficient we only log when debugging
-        if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
-            logger.debug('%s %s: \n%s %s \nkwargs: %s', self.config.broker.name,
-                         self.config.name, method, url, json.dumps(kwargs, indent=2, sort_keys=True))
         return url
 
-    def _process_response(self, response):
-        if os.environ.get('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
-            logger.debug('Response: %s \n%s', response.status_code,
-                         json.dumps(response.content.decode('utf-8'), indent=2, sort_keys=True))
+    def _log_request(self, method, url, **kwargs):
+        # to make the code more efficient we only log when debugging
+        if os.getenv('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
+            logger.debug('%s %s %s', self.log_prefix, method, url)
+            logger.debug('%s kwargs: %s', self.log_prefix, kwargs)
+
+    def _log_response(self, response):
+        if os.getenv('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
+            logger.debug('%s response: %s', self.log_prefix,
+                         response.status_code)
+            logger.debug('%s content: %s', self.log_prefix, response.json())
 
     def request(self, method: str, endpoint: str, realm='', **kwargs):
-        url = self._prepare_request(method, endpoint, **kwargs)
+        url = self._get_request_url(method, endpoint, **kwargs)
+
+        self._log_request(method, url, **kwargs)
 
         response = self.session.request(
             method, url, header_auth=True, **kwargs)
 
-        self._process_response(response)
+        self._log_response(response)
+
         if response.status_code == 200:
             # etrade session goes inactive if no requests made for two hours
             # so we update session.refreshed timestamp here to keep track
@@ -95,7 +104,7 @@ class Etrade:
         return self.request("DELETE", endpoint, **kwargs)
 
     def get_authorize_url(self) -> str:
-        service = self._service
+        service = self.service
 
         request_token, request_token_secret = service.get_request_token(
             params={"oauth_callback": "oob", "format": "json"})
@@ -112,7 +121,7 @@ class Etrade:
 
     def authorize(self, oauth_verifier: str) -> ServiceProvider:
         config = self.config
-        service = self._service
+        service = self.service
         access_token, access_token_secret = service.get_access_token(
             config.session.request_token,
             config.session.request_token_secret,
@@ -128,23 +137,34 @@ class Etrade:
 
         return config
 
+    def _get_session_status_from_db(self):
+        return ProviderSession.objects \
+            .filter(provider=self.config) \
+            .values_list('status', 'refreshed') \
+            .first()
+
     def is_session_active(self) -> bool:
-        config_session = ProviderSession.objects.filter(
-            provider=self.config).first()
+        config_session = self._get_session_status_from_db()
         if not config_session:
             return False
 
-        if config_session.status != ProviderSession.CONNECTED:
+        status, refreshed = config_session
+        if status != ProviderSession.CONNECTED:
             return False
 
         now = timezone.now()
-        refreshed = config_session.refreshed
         if now.date() == refreshed.date() and now - refreshed < timedelta(hours=2):
             return True
 
+        # if access token is older than 2h, try to refresh it
         refresh_url = self.config.refresh_url
         response = self.session.get(refresh_url, header_auth=True)
-        return response.status_code == 200
+        if response.status_code != 200:
+            return False
+
+        # access token has been refreshed
+        self._update_session_refreshed_date()
+        return True
 
     def get_accounts(self) -> dict:
         # request accounts
@@ -481,6 +501,18 @@ class Etrade:
                 return position["quantity"]
 
         return None
+
+    def get_position(self, account_key, symbol):
+        positions = self.get_positions(account_key)
+
+        quantity = None
+        entry_price = None
+        for position in positions:
+            if position['symbolDescription'] == symbol:
+                quantity = position["quantity"]
+                entry_price = Decimal(position["price"])
+
+        return quantity, entry_price
 
     def get_transactions(self, account_key, from_date=None, to_date=None):
         ny_tz = pytz.timezone("America/New_York")

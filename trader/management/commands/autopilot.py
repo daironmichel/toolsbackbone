@@ -8,7 +8,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from trader.aio.db import database_sync_to_async
-from trader.aio.providers import XEtrade
+from trader.aio.providers import AsyncEtrade
+from trader.enums import MarketSession
 from trader.models import AutoPilotTask, ProviderSession, ServiceProvider
 
 # pylint: disable=invalid-name
@@ -26,18 +27,14 @@ def get_passengers():
 
 
 @database_sync_to_async
-def get_config():
-    return ServiceProvider.objects.get(id=1)
+def get_stored_session(config):
+    return ProviderSession.objects.filter(
+        provider=config).first()
 
 
 @database_sync_to_async
-def get_token(config):
-    config_session = ProviderSession.objects.filter(
-        provider=config).first()
-    if not config_session:
-        return None
-    return (config_session.access_token,
-            config_session.access_token_secret)
+def delete_passenger(passenger: AutoPilotTask):
+    passenger.delete()
 
 
 @database_sync_to_async
@@ -46,22 +43,83 @@ def set_passenger_status(passenger: AutoPilotTask, status: int):
     passenger.save(update_fields=['status'])
 
 
+@database_sync_to_async
+def refresh_passenger_signal(passenger: AutoPilotTask):
+    # deleting model field will cause a refresh from db on get
+    del passenger.signal
+    return passenger.signal
+
+
+async def get_provider(pilot: AutoPilotTask):
+    stored_session = await get_stored_session(pilot.provider)
+    return AsyncEtrade(pilot.provider, stored_session)
+
+
+async def sell_position(pilot_name: str, passenger: AutoPilotTask):
+    # get position
+    # get quote
+    # place order
+    # watch order until executed or 5sec
+    # cancel order if 5sec passed and no fill or partial
+    # repeat untill out of position
+    await asyncio.sleep(3)
+
+
+async def track_position(pilot_name: str, passenger: AutoPilotTask):
+    # get position
+    # get quote
+    pass
+
+
 async def driver(name: str, queue: asyncio.Queue):
     logger.info("%s %s online.", PREFIX, name)
     try:
-        pilot: AutoPilotTask = await queue.get()
-        etrade: XEtrade = await get_provider(pilot)
-        # TODO: implemente driver
+        passenger: AutoPilotTask = await queue.get()
+        await set_passenger_status(passenger, AutoPilotTask.RUNNING)
 
-        # for _ in range(3):
-        #     print(f'{pilot.symbol + ":":<6} getting quote...')
-        #     start = time.perf_counter()
-        #     quote = await etrade.get_quote(pilot.symbol)
-        #     elapsed = time.perf_counter() - start
-        #     last_price = Decimal(str(quote.get("All").get("lastTrade")))
-        #     print(f'{pilot.symbol + ":":<6} {last_price} {"":>20} {elapsed:0.2f} sec')
-        #     print(f'{pilot.symbol + ":":<6} sleeping 1 sec')
-        #     await asyncio.sleep(1)
+        while passenger.status == AutoPilotTask.RUNNING:
+            etrade: AsyncEtrade = await get_provider(passenger)
+            override_signal = await refresh_passenger_signal(passenger)
+            if override_signal == AutoPilotTask.MANUAL_OVERRIDE:
+                logger.info("%s %s received signal MANUAL_OVERRIDE.",
+                            PREFIX, name)
+                logger.info("%s %s releasing control...", PREFIX, name)
+                await set_passenger_status(passenger, AutoPilotTask.DONE)
+                continue
+
+            # if no market session, sleep 1h (repeat until market opens)
+            if MarketSession.current() is None:
+                logger.debug("%s %s market is closed. sleeping 1h",
+                             PREFIX, name)
+                await asyncio.sleep(3600)
+                continue
+
+            # if no access token, sleep 1s (repeat until valid access)
+            if not etrade.is_session_active():
+                logger.debug("%s %s waiting for valid %s session...",
+                             PREFIX, name, etrade.name)
+                await asyncio.sleep(1)
+                continue
+
+            if override_signal == AutoPilotTask.SELL:
+                await sell_position(name, passenger)
+                continue
+
+            # get quote
+            # get position
+            # determine if needs to sell
+            # if sell, go into selling mode
+
+            # for _ in range(3):
+            #     print(f'{pilot.symbol + ":":<6} getting quote...')
+            #     start = time.perf_counter()
+            #     quote = await etrade.get_quote(pilot.symbol)
+            #     elapsed = time.perf_counter() - start
+            #     last_price = Decimal(str(quote.get("All").get("lastTrade")))
+            #     print(f'{pilot.symbol + ":":<6} {last_price} {"":>20} {elapsed:0.2f} sec')
+            #     print(f'{pilot.symbol + ":":<6} sleeping 1 sec')
+            #     await asyncio.sleep(1)
+        await delete_passenger(passenger)
     except asyncio.CancelledError:
         logger.info("%s %s stopping...", PREFIX, name)
 
@@ -72,11 +130,6 @@ async def driver(name: str, queue: asyncio.Queue):
     finally:
         logger.info("%s %s done.", PREFIX, name)
         queue.task_done()
-
-
-async def get_provider(pilot: AutoPilotTask):
-    token, token_secret = (await get_token(pilot.provider)) or (None, None)
-    return XEtrade(pilot.provider, token, token_secret)
 
 
 async def shutdown(sig, loop):
@@ -122,16 +175,18 @@ async def main():
         logger.debug("%s looking for passengers...", PREFIX)
         passengers = await get_passengers()
         if not passengers:
-            logger.debug("%s no passengers. sleeping for 1 sec.", PREFIX)
+            # logger.debug("%s no passengers. sleeping for 1 sec.", PREFIX)
             await asyncio.sleep(1)
             continue
 
         logger.debug("%s %s passengers in line.", PREFIX, len(passengers))
         for passngr in passengers:
+            driver_name = f'driver-{passngr.user_id}-{passngr.symbol}'
+            logger.debug("%s creating %s...", PREFIX, driver_name)
             await queue.put(passngr)
             await set_passenger_status(passngr, AutoPilotTask.QUEUED)
             asyncio.create_task(
-                driver(f'driver-{passngr.user_id}-{passngr.symbol}', queue))
+                driver(driver_name, queue))
             if queue.full():
                 break
 

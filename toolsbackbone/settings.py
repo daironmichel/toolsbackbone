@@ -27,12 +27,12 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '!8(y8(55&m6i*yp_8z4do-c7$bbpg+=02)d5k6_-87m&1wzzgf'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(strtobool(os.environ.get('DJANGO_DEBUG', 'false')))
+DEBUG = bool(strtobool(os.getenv('DJANGO_DEBUG', 'false')))
 
 ALLOWED_HOSTS = []
 
 SECURE_SSL_REDIRECT = bool(
-    strtobool(os.environ.get('DJANGO_HTTPS_ONLY', 'true')))
+    strtobool(os.getenv('DJANGO_HTTPS_ONLY', 'true')))
 
 
 # Application definition

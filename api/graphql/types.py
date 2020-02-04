@@ -5,9 +5,9 @@ import graphene
 from graphene import relay
 from graphene_django.types import DjangoObjectType
 
-from trader.models import (Account, Broker, ProviderSession, ServiceProvider,
-                           Settings, TradingStrategy)
-from trader.providers import Etrade, get_provider_instance
+from trader.models import (Account, AutoPilotTask, Broker, ProviderSession,
+                           ServiceProvider, Settings, TradingStrategy)
+from trader.providers import get_provider_instance
 
 from .graphene_overrides import NonNullConnection
 
@@ -177,6 +177,23 @@ class BrokerNode(DjangoObjectType):
 class BrokerConnection(NonNullConnection):
     class Meta:
         node = BrokerNode
+
+
+class AutoPilotTaskNode(DjangoObjectType):
+    class Meta:
+        exclude_fields = ('user',)
+        model = AutoPilotTask
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    # pylint: disable=redefined-builtin
+    def get_node(cls, info, id):
+        return AutoPilotTask.objects.get(id=id, user_id=info.context.user.id)
+
+
+class AutoPilotTaskConnection(NonNullConnection):
+    class Meta:
+        node = AutoPilotTaskNode
 
 
 class QuoteType(graphene.ObjectType):
@@ -361,10 +378,12 @@ class PerformanceType(graphene.ObjectType):
 
 class PositionType(graphene.ObjectType):
     symbol = graphene.String(required=True)
+    entry_price = graphene.Decimal(required=True)
     price_paid = graphene.Decimal(required=True)
     quantity = graphene.Int(required=True)
     total_gain = graphene.Decimal(required=True)
     total_gain_pct = graphene.Decimal(required=True)
+    autopilot = graphene.Field(AutoPilotTaskNode)
 
     def resolve_symbol(self, info, **kwargs):
         symbol = self.get("symbolDescription")
@@ -372,6 +391,16 @@ class PositionType(graphene.ObjectType):
             raise ValueError(
                 f'Expecting a value for symbol. Got: "{symbol}"')
         return symbol
+
+    def resolve_entry_price(self, info, **kwargs):
+        price = self.get("price")
+        if price is None:
+            raise ValueError(
+                f'Expecting a value for entry_price. Got: "{price}"')
+        value = Decimal(str(price))
+        if value.adjusted() >= 0:
+            return value.quantize(Decimal('0.01'))
+        return value
 
     def resolve_price_paid(self, info, **kwargs):
         price_paid = self.get("pricePaid")
@@ -403,6 +432,15 @@ class PositionType(graphene.ObjectType):
             raise ValueError(
                 f'Expecting a value for total_gain_pct. Got: "{total_gain_pct}"')
         return Decimal(str(total_gain_pct)).quantize(Decimal('0.01'))
+
+    def resolve_autopilot(self, info, **kwargs):
+        symbol = self.get("symbolDescription")
+        if not symbol:
+            raise ValueError(
+                f'Expecting a value for symbol. Got: "{symbol}"')
+
+        return AutoPilotTask.objects.filter(
+            symbol=symbol, user_id=info.context.user.id).first()
 
 
 class ViewerCredentialsType(graphene.ObjectType):
