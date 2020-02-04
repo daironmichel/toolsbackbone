@@ -39,5 +39,5 @@ def oauth1_verify(request: Request):
             raise
 
     return Response({
-        "redirect": f'/broker/{provider.broker.slug}/{provider.slug}/'
+        "redirect": f'/brokers/{provider.broker.slug}/{provider.slug}/'
     })
