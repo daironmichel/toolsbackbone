@@ -19,7 +19,7 @@ def oauth1_verify(request: Request):
 
     provider = ServiceProvider.objects \
         .filter(session__request_token=oauth_token) \
-        .select_related('session') \
+        .select_related('session', 'broker', 'user__auth_token') \
         .first()
 
     if not provider:
@@ -39,5 +39,7 @@ def oauth1_verify(request: Request):
             raise
 
     return Response({
-        "redirect": f'/brokers/{provider.broker.slug}/{provider.slug}/'
+        "accessToken": provider.user.auth_token.key,
+        "brokerSlug": provider.broker.slug,
+        "providerSlug": provider.slug,
     })
