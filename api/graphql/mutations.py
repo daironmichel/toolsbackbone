@@ -283,18 +283,100 @@ class SellStock(relay.ClientIDMutation):
         return SellStock()
 
 
-class PlaceStopLossError(graphene.Enum):
+class StopProfitError(graphene.Enum):
+    ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
+    STRATEGY_NOT_FOUND = 'STRATEGY_NOT_FOUND'
+    NOT_ALLOWED_ON_AUTOPILOT = 'NOT_ALLOWED_ON_AUTOPILOT'
+
+
+class StopProfit(relay.ClientIDMutation):
+    class Input:
+        provider_id = graphene.ID(required=True)
+        symbol = graphene.String(required=True)
+        strategy_id = graphene.ID()
+        account_id = graphene.ID()
+
+    error = graphene.Field(StopProfitError)
+    error_message = graphene.String()
+
+    @classmethod
+    def mutate_and_get_payload(cls, root, info, symbol, provider_id, 
+                               strategy_id=None, account_id=None):
+        account = Account.objects.get(id=account_id) if account_id else None
+        provider = ServiceProvider.objects.select_related('session') \
+            .get(id=provider_id)
+        
+        strategy = None
+        if strategy_id:
+            strategy = info.context.user.strategies.filter(id=strategy_id).first()
+            if not strategy:
+                return StopProfit(
+                    error=StopProfitError.STRATEGY_NOT_FOUND,
+                    error_message=f'TradingStrategy with id {strategy_id} not found.'
+                )
+
+        account_key = account.account_key.strip() if account \
+            else provider.account_key.strip()
+
+        if not account_key:
+            return StopProfit(
+                error=StopProfitError.ACCOUNT_NOT_PROVIDED,
+                error_message='Either specify an accountId that has a valid accountKey ' +
+                'or configure a default accountKey on the provider.'
+            )
+
+        autopilot = get_autopilot(info.context.user.id, symbol)
+        if autopilot:
+            return StopProfit(
+                error=StopProfitError.NOT_ALLOWED_ON_AUTOPILOT,
+                error_message='You must turn off autopilot first.'
+            )
+
+        etrade = get_provider_instance(provider)
+        position_quantity, entry_price = etrade.get_position(account_key, symbol)
+
+        if strategy:
+            profit_amount = entry_price * (strategy.profit_percent / 100)
+            stop_price = get_round_price(entry_price + profit_amount)
+        else:
+            last_price = etrade.get_ask_price(symbol)
+            profit_amount = last_price * Decimal('0.02')
+            stop_price = get_round_price(last_price + profit_amount)
+
+        limit_price = get_limit_price(
+            OrderAction.SELL, stop_price, margin=Decimal('0.01'))
+
+        order_params = {
+            'account_key': account_key,
+            'market_session': MarketSession.current().value,
+            'action': OrderAction.SELL.value,
+            'symbol': symbol,
+            'price_type': PriceType.STOP_LIMIT.value,
+            'quantity': position_quantity,
+            'stop_price': stop_price,
+            'limit_price': limit_price
+        }
+
+        preview_ids = etrade.preview_order(
+            order_client_id=get_random_string(length=20), **order_params)
+        etrade.place_order(order_client_id=get_random_string(
+            length=20), preview_ids=preview_ids, **order_params)
+
+        return StopProfit()
+
+
+class StopLossError(graphene.Enum):
     ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
     NOT_ALLOWED_ON_AUTOPILOT = 'NOT_ALLOWED_ON_AUTOPILOT'
 
 
-class PlaceStopLoss(relay.ClientIDMutation):
+class StopLoss(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
         account_id = graphene.ID()
 
-    error = graphene.Field(PlaceStopLossError)
+    error = graphene.Field(StopLossError)
     error_message = graphene.String()
 
     @classmethod
@@ -306,16 +388,16 @@ class PlaceStopLoss(relay.ClientIDMutation):
             else provider.account_key.strip()
 
         if not account_key:
-            return PlaceStopLoss(
-                error=PlaceStopLossError.ACCOUNT_NOT_PROVIDED,
+            return StopLoss(
+                error=StopLossError.ACCOUNT_NOT_PROVIDED,
                 error_message='Either specify an accountId that has a valid accountKey ' +
                 'or configure a default accountKey on the provider.'
             )
 
         autopilot = get_autopilot(info.context.user.id, symbol)
         if autopilot:
-            return PlaceStopLoss(
-                error=PlaceStopLossError.NOT_ALLOWED_ON_AUTOPILOT,
+            return StopLoss(
+                error=StopLossError.NOT_ALLOWED_ON_AUTOPILOT,
                 error_message='You must turn off autopilot first.'
             )
 
@@ -343,7 +425,7 @@ class PlaceStopLoss(relay.ClientIDMutation):
         etrade.place_order(order_client_id=get_random_string(
             length=20), preview_ids=preview_ids, **order_params)
 
-        return PlaceStopLoss()
+        return StopLoss()
 
 
 class CancelOrderError(graphene.Enum):
@@ -583,7 +665,8 @@ class Mutation(graphene.ObjectType):
     sync_accounts = SyncAccounts.Field(required=True)
     buy_stock = BuyStock.Field(required=True)
     sell_stock = SellStock.Field(required=True)
-    place_stop_loss = PlaceStopLoss.Field(required=True)
+    stop_loss = StopLoss.Field(required=True)
+    stop_profit = StopProfit.Field(required=True)
     cancel_order = CancelOrder.Field(required=True)
     save_settings = SaveSettings.Field(required=True)
     autopilot_ON = AutoPilotON.Field(required=True)

@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from trader.models import ServiceProvider
 from trader.providers import get_provider_instance
 
+# from rest_auth.views
+
 
 @api_view(['POST'])
 def oauth1_verify(request: Request):
