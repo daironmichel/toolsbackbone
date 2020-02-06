@@ -210,7 +210,9 @@ class OrderType(graphene.ObjectType):
     order_id = graphene.ID(required=True)
     symbol = graphene.String(required=True)
     price_type = graphene.String(required=True)
-    quantity = graphene.Int(required=True)
+    pending_quantity = graphene.Int(required=True)
+    ordered_quantity = graphene.Int(required=True)
+    filled_quantity = graphene.Int(required=True)
     limit_price = graphene.Decimal(required=True)
     stop_price = graphene.Decimal()
     stop_limit_price = graphene.Decimal()
@@ -253,13 +255,35 @@ class OrderType(graphene.ObjectType):
             return value.quantize(Decimal('0.01'))
         return value
 
-    def resolve_quantity(self, info, **kwargs):
+    def resolve_pending_quantity(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        instrument = details.get("Instrument")[0]
+        ordered_quantity = instrument.get("orderedQuantity")
+        filled_quantity = instrument.get("filledQuantity")
+        if not ordered_quantity and ordered_quantity != 0:
+            raise ValueError(
+                f'pendingQuantity: Expecting a value for orderedQuantity. Got: "{ordered_quantity}"')
+        if not filled_quantity and filled_quantity != 0:
+            raise ValueError(
+                f'pendingQuantity: Expecting a value for filledQuantity. Got: "{filled_quantity}"')
+        return int(ordered_quantity) - int(filled_quantity)
+
+    def resolve_ordered_quantity(self, info, **kwargs):
         details = self.get("OrderDetail")[0]
         instrument = details.get("Instrument")[0]
         quantity = instrument.get("orderedQuantity")
         if not quantity and quantity != 0:
             raise ValueError(
-                f'Expecting a value for quantity. Got: "{quantity}"')
+                f'Expecting a value for orderedQuantity. Got: "{quantity}"')
+        return int(quantity)
+
+    def resolve_filled_quantity(self, info, **kwargs):
+        details = self.get("OrderDetail")[0]
+        instrument = details.get("Instrument")[0]
+        quantity = instrument.get("filledQuantity")
+        if not quantity and quantity != 0:
+            raise ValueError(
+                f'Expecting a value for filledQuantity. Got: "{quantity}"')
         return int(quantity)
 
     def resolve_limit_price(self, info, **kwargs):
