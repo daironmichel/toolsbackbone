@@ -55,6 +55,16 @@ async def get_provider(pilot: AutoPilotTask):
     return AsyncEtrade(pilot.provider, stored_session)
 
 
+async def buy_position(pilot_name: str, passenger: AutoPilotTask):
+    # get position
+    # get quote
+    # place order
+    # watch order until executed or 5sec
+    # cancel order if 5sec passed and no fill or partial
+    # repeat untill out of position
+    await asyncio.sleep(3)
+
+
 async def sell_position(pilot_name: str, passenger: AutoPilotTask):
     # get position
     # get quote
@@ -71,6 +81,33 @@ async def track_position(pilot_name: str, passenger: AutoPilotTask):
     pass
 
 
+async def green_light(pilot_name: str, passenger: AutoPilotTask,
+                      etrade: AsyncEtrade) -> bool:
+    # handle override signal
+    if passenger.signal == AutoPilotTask.MANUAL_OVERRIDE:
+        logger.info("%s %s received signal MANUAL_OVERRIDE.",
+                    PREFIX, pilot_name)
+        logger.info("%s %s releasing control...", PREFIX, pilot_name)
+        await set_passenger_status(passenger, AutoPilotTask.DONE)
+        return False
+
+    # if no market session, sleep 1h (repeat until market opens)
+    if MarketSession.current() is None:
+        logger.debug("%s %s market is closed. sleeping 1h",
+                     PREFIX, pilot_name)
+        await asyncio.sleep(3600)
+        return False
+
+    # if no access token, sleep 1s (repeat until valid access)
+    if not etrade.is_session_active():
+        logger.debug("%s %s waiting for valid %s session...",
+                     PREFIX, pilot_name, etrade.name)
+        await asyncio.sleep(1)
+        return False
+
+    return True
+
+
 async def driver(name: str, queue: asyncio.Queue):
     logger.info("%s %s online.", PREFIX, name)
     try:
@@ -80,30 +117,17 @@ async def driver(name: str, queue: asyncio.Queue):
         while passenger.status == AutoPilotTask.RUNNING:
             etrade: AsyncEtrade = await get_provider(passenger)
             override_signal = await refresh_passenger_signal(passenger)
-            if override_signal == AutoPilotTask.MANUAL_OVERRIDE:
-                logger.info("%s %s received signal MANUAL_OVERRIDE.",
-                            PREFIX, name)
-                logger.info("%s %s releasing control...", PREFIX, name)
-                await set_passenger_status(passenger, AutoPilotTask.DONE)
+            has_green_light = await green_light(name, passenger, etrade)
+
+            if not has_green_light:
                 continue
 
-            # if no market session, sleep 1h (repeat until market opens)
-            if MarketSession.current() is None:
-                logger.debug("%s %s market is closed. sleeping 1h",
-                             PREFIX, name)
-                await asyncio.sleep(3600)
-                continue
-
-            # if no access token, sleep 1s (repeat until valid access)
-            if not etrade.is_session_active():
-                logger.debug("%s %s waiting for valid %s session...",
-                             PREFIX, name, etrade.name)
-                await asyncio.sleep(1)
-                continue
-
-            if override_signal == AutoPilotTask.SELL:
+            if override_signal == AutoPilotTask.BUY:
+                await buy_position(name, passenger)
+            elif override_signal == AutoPilotTask.SELL:
                 await sell_position(name, passenger)
-                continue
+            else:
+                await track_position(name, passenger)
 
             # get quote
             # get position

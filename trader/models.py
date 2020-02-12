@@ -253,6 +253,8 @@ class AutoPilotTask(models.Model):
     entry_price = models.DecimalField(
         max_digits=12, decimal_places=2, default=0, blank=True)
 
+    tracking_order_id = models.CharField(max_length=250, null=True, blank=True)
+
     # price used for calculating the loss amount based on the strategy
     # loss percentage. It will increase by the loss_percent amount when
     # profit_percent + loss_percent is reached.

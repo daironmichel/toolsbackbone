@@ -8,6 +8,7 @@ pylint = "*"
 autopep8 = "*"
 pytest = "*"
 pytest-django = "*"
+rope = "*"
 
 [packages]
 django = "*"

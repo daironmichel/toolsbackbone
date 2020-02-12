@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import timedelta
 from decimal import Decimal
@@ -93,7 +94,7 @@ class AsyncEtrade(Etrade):
 
     async def get_quote(self, symbol):
         response = await self.get(f'/market/quote/{symbol}.json')
-        return self._process_get_quote_response(response)
+        return self._process_get_quote(response)
 
     async def get_bid_price(self, symbol: str) -> Decimal:
         quote = await self.get_quote(symbol)
@@ -102,3 +103,55 @@ class AsyncEtrade(Etrade):
     async def get_ask_price(self, symbol: str) -> Decimal:
         quote = await self.get_quote(symbol)
         return Decimal(str(quote.get("All").get("bid")))
+
+    async def preview_order(self, account_key, order_client_id, market_session, action,
+                            symbol, price_type, quantity, limit_price, stop_price=""):
+        headers, payload = self._prepare_preview_order(order_client_id, market_session,
+                                                       action, symbol, price_type,
+                                                       limit_price, stop_price, quantity)
+
+        # payload = json.dumps(payload)
+        response = await self.post(
+            f'/accounts/{account_key}/orders/preview.json',
+            headers=headers,
+            data=json.dumps(payload))
+
+        return self._process_preview_order(response)
+
+    async def place_order(self, account_key, preview_ids, order_client_id, market_session,
+                          action, symbol, price_type, quantity, limit_price, stop_price=""):
+        headers, payload = self._prepare_place_order(order_client_id, preview_ids,
+                                                     market_session, action, symbol,
+                                                     price_type, limit_price,
+                                                     stop_price, quantity)
+
+        response = await self.post(
+            f'/accounts/{account_key}/orders/place.json',
+            headers=headers,
+            data=json.dumps(payload))
+
+        return self._process_place_order(response)
+
+    async def get_order_details(self, account_key, order_id, symbol):
+        headers, params = self._prepare_order_details(symbol)
+        response = await self.get(
+            f'/accounts/{account_key}/orders.json', params=params, headers=headers)
+
+        return self._process_order_details(order_id, response)
+
+    async def cancel_order(self, account_key, order_id):
+        headers, payload = self._prepare_cancel_order(order_id)
+        response = await self.put(
+            f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload)
+
+        return self._process_cancel_order(response)
+
+    async def get_positions(self, account_key):
+        response = await self.get(f'/accounts/{account_key}/portfolio.json')
+
+        return self._process_get_positions(response)
+
+    async def get_position(self, account_key, symbol):
+        positions = await self.get_positions(account_key)
+
+        return self._process_get_position(symbol, positions)

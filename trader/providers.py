@@ -234,7 +234,7 @@ class Etrade:
                 'marginBuyingPower', 0)))
             account.save()
 
-    def _process_get_quote_response(self, response):
+    def _process_get_quote(self, response):
         data = response.json() if response.content else {}
 
         if response.status_code != 200:
@@ -265,7 +265,7 @@ class Etrade:
 
     def get_quote(self, symbol):
         response = self.get(f'/market/quote/{symbol}.json')
-        return self._process_get_quote_response(response)
+        return self._process_get_quote(response)
 
     def get_last_trade_price(self, symbol: str) -> Decimal:
         quote = self.get_quote(symbol)
@@ -280,7 +280,7 @@ class Etrade:
         return Decimal(str(quote.get("All").get("ask")))
 
     @staticmethod
-    def build_order_payload(market_session, action, symbol, price_type, limit_price, stop_price, quantity):
+    def _build_order_payload(market_session, action, symbol, price_type, limit_price, stop_price, quantity):
         return {
             "allOrNone": "false",
             "priceType": price_type,
@@ -301,8 +301,8 @@ class Etrade:
             ]
         }
 
-    def preview_order(self, account_key, order_client_id, market_session, action,
-                      symbol, price_type, quantity, limit_price, stop_price=""):
+    def _prepare_preview_order(self, order_client_id, market_session, action, symbol,
+                               price_type, limit_price, stop_price, quantity):
         if len(str(order_client_id)) > 20:
             raise ValueError(
                 "Argument order_client_id is too long. Should be 20 characters or less.")
@@ -315,19 +315,15 @@ class Etrade:
                 "orderType": "EQ",
                 "clientOrderId": str(order_client_id),
                 "Order": [
-                    self.build_order_payload(
+                    self._build_order_payload(
                         market_session, action, symbol, price_type,
                         limit_price, stop_price, quantity)
                 ]
             }
         }
+        return headers, payload
 
-        # payload = json.dumps(payload)
-        response = self.post(
-            f'/accounts/{account_key}/orders/preview.json',
-            headers=headers,
-            data=json.dumps(payload))
-
+    def _process_preview_order(self, response):
         data = response.json() if response.content else {}
 
         if response.status_code != 200:
@@ -347,8 +343,22 @@ class Etrade:
 
         return preview_ids
 
-    def place_order(self, account_key, preview_ids, order_client_id, market_session,
-                    action, symbol, price_type, quantity, limit_price, stop_price=""):
+    def preview_order(self, account_key, order_client_id, market_session, action,
+                      symbol, price_type, quantity, limit_price, stop_price=""):
+        headers, payload = self._prepare_preview_order(order_client_id, market_session,
+                                                       action, symbol, price_type,
+                                                       limit_price, stop_price, quantity)
+
+        # payload = json.dumps(payload)
+        response = self.post(
+            f'/accounts/{account_key}/orders/preview.json',
+            headers=headers,
+            data=json.dumps(payload))
+
+        return self._process_preview_order(response)
+
+    def _prepare_place_order(self, order_client_id, preview_ids, market_session,
+                             action, symbol, price_type, limit_price, stop_price, quantity):
         if len(str(order_client_id)) > 20:
             raise ValueError(
                 "Argument order_client_id is too long. Should be 20 characters or less.")
@@ -361,18 +371,15 @@ class Etrade:
                 "clientOrderId": str(order_client_id),
                 "PreviewIds": [{"previewId": pid} for pid in preview_ids],
                 "Order": [
-                    self.build_order_payload(
+                    self._build_order_payload(
                         market_session, action, symbol, price_type,
                         limit_price, stop_price, quantity)
                 ]
             }
         }
+        return headers, payload
 
-        response = self.post(
-            f'/accounts/{account_key}/orders/place.json',
-            headers=headers,
-            data=json.dumps(payload))
-
+    def _process_place_order(self, response):
         data = response.json() if response.content else {}
 
         if response.status_code != 200:
@@ -393,12 +400,26 @@ class Etrade:
 
         return order_ids[0].get('orderId')
 
-    def get_order_details(self, account_key, order_id, symbol):
+    def place_order(self, account_key, preview_ids, order_client_id, market_session,
+                    action, symbol, price_type, quantity, limit_price, stop_price=""):
+        headers, payload = self._prepare_place_order(order_client_id, preview_ids,
+                                                     market_session, action, symbol,
+                                                     price_type, limit_price,
+                                                     stop_price, quantity)
+
+        response = self.post(
+            f'/accounts/{account_key}/orders/place.json',
+            headers=headers,
+            data=json.dumps(payload))
+
+        return self._process_place_order(response)
+
+    def _prepare_order_details(self, symbol):
         params = {"symbol": symbol}
         headers = {"consumerkey": self.config.consumer_key}
-        response = self.get(
-            f'/accounts/{account_key}/orders.json', params=params, headers=headers)
+        return headers, params
 
+    def _process_order_details(self, order_id, response):
         if response.status_code == 204:
             return None  # Not Found
 
@@ -414,6 +435,13 @@ class Etrade:
                 return order
 
         return None
+
+    def get_order_details(self, account_key, order_id, symbol):
+        headers, params = self._prepare_order_details(symbol)
+        response = self.get(
+            f'/accounts/{account_key}/orders.json', params=params, headers=headers)
+
+        return self._process_order_details(order_id, response)
 
     def get_orders(self, account_key, from_date=None, to_date=None):
         ny_tz = pytz.timezone("America/New_York")
@@ -443,7 +471,7 @@ class Etrade:
 
         return data.get("OrdersResponse", {}).get("Order", None)
 
-    def cancel_order(self, account_key, order_id):
+    def _prepare_cancel_order(self, order_id):
         headers = {"Content-Type": "application/json",
                    "consumerKey": self.config.consumer_key}
 
@@ -454,9 +482,9 @@ class Etrade:
         }
 
         payload = json.dumps(payload)
-        response = self.put(
-            f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload)
+        return headers, payload
 
+    def _process_cancel_order(self, response):
         data = response.json() if response.content else {}
 
         if response.status_code != 200:
@@ -469,9 +497,14 @@ class Etrade:
 
         return True
 
-    def get_positions(self, account_key):
-        response = self.get(f'/accounts/{account_key}/portfolio.json')
+    def cancel_order(self, account_key, order_id):
+        headers, payload = self._prepare_cancel_order(order_id)
+        response = self.put(
+            f'/accounts/{account_key}/orders/cancel.json', headers=headers, data=payload)
 
+        return self._process_cancel_order(response)
+
+    def _process_get_positions(self, response):
         if response.status_code == 204:
             return None  # None Found
 
@@ -493,18 +526,24 @@ class Etrade:
 
         return acc_portfolio[0].get('Position', None)
 
-    def get_position_quantity(self, account_key, symbol):
-        positions = self.get_positions(account_key)
+    def get_positions(self, account_key):
+        response = self.get(f'/accounts/{account_key}/portfolio.json')
 
+        return self._process_get_positions(response)
+
+    def _process_get_position_quantity(self, symbol, positions):
         for position in positions:
             if position['symbolDescription'] == symbol:
                 return position["quantity"]
 
         return None
 
-    def get_position(self, account_key, symbol):
+    def get_position_quantity(self, account_key, symbol):
         positions = self.get_positions(account_key)
 
+        return self._process_get_position_quantity(symbol, positions)
+
+    def _process_get_position(self, symbol, positions):
         quantity = None
         entry_price = None
         for position in positions:
@@ -513,6 +552,11 @@ class Etrade:
                 entry_price = Decimal(position["price"])
 
         return quantity, entry_price
+
+    def get_position(self, account_key, symbol):
+        positions = self.get_positions(account_key)
+
+        return self._process_get_position(symbol, positions)
 
     def get_transactions(self, account_key, from_date=None, to_date=None):
         ny_tz = pytz.timezone("America/New_York")
