@@ -38,9 +38,12 @@ def delete_passenger(passenger: AutoPilotTask):
 
 
 @database_sync_to_async
-def set_passenger_status(passenger: AutoPilotTask, status: int):
-    passenger.status = status
-    passenger.save(update_fields=['status'])
+def update_passenger(passenger: AutoPilotTask, fields: dict):
+    updated_fields = []
+    for field, value in fields.items():
+        setattr(passenger, field, value)
+        updated_fields.append(field)
+    passenger.save(update_fields=updated_fields)
 
 
 @database_sync_to_async
@@ -88,7 +91,7 @@ async def green_light(pilot_name: str, passenger: AutoPilotTask,
         logger.info("%s %s received signal MANUAL_OVERRIDE.",
                     PREFIX, pilot_name)
         logger.info("%s %s releasing control...", PREFIX, pilot_name)
-        await set_passenger_status(passenger, AutoPilotTask.DONE)
+        await update_passenger(passenger, {'status': AutoPilotTask.DONE})
         return False
 
     # if no market session, sleep 1h (repeat until market opens)
@@ -112,7 +115,7 @@ async def driver(name: str, queue: asyncio.Queue):
     logger.info("%s %s online.", PREFIX, name)
     try:
         passenger: AutoPilotTask = await queue.get()
-        await set_passenger_status(passenger, AutoPilotTask.RUNNING)
+        await update_passenger(passenger, {'status': AutoPilotTask.RUNNING})
 
         while passenger.status == AutoPilotTask.RUNNING:
             etrade: AsyncEtrade = await get_provider(passenger)
@@ -122,9 +125,9 @@ async def driver(name: str, queue: asyncio.Queue):
             if not has_green_light:
                 continue
 
-            if override_signal == AutoPilotTask.BUY:
+            if override_signal == AutoPilotTask.BUY or passenger.state == AutoPilotTask.BUYING:
                 await buy_position(name, passenger)
-            elif override_signal == AutoPilotTask.SELL:
+            elif override_signal == AutoPilotTask.SELL or passenger.state == AutoPilotTask.SELLING:
                 await sell_position(name, passenger)
             else:
                 await track_position(name, passenger)
@@ -208,7 +211,7 @@ async def main():
             driver_name = f'driver-{passngr.user_id}-{passngr.symbol}'
             logger.debug("%s creating %s...", PREFIX, driver_name)
             await queue.put(passngr)
-            await set_passenger_status(passngr, AutoPilotTask.QUEUED)
+            await update_passenger(passngr, {'status': AutoPilotTask.QUEUED})
             asyncio.create_task(
                 driver(driver_name, queue))
             if queue.full():
