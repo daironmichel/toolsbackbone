@@ -11,6 +11,7 @@ from trader.aio.db import database_sync_to_async
 from trader.aio.providers import AsyncEtrade
 from trader.enums import MarketSession
 from trader.models import AutoPilotTask, ProviderSession, ServiceProvider
+from trader.utils import time_till_market_open
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.autopilot")
@@ -95,10 +96,11 @@ async def green_light(pilot_name: str, passenger: AutoPilotTask,
         return False
 
     # if no market session, sleep 1h (repeat until market opens)
-    if MarketSession.current() is None:
+    if MarketSession.current(passenger.is_otc) is None:
         logger.debug("%s %s market is closed. sleeping 1h",
                      PREFIX, pilot_name)
-        await asyncio.sleep(3600)
+        time_till_open = time_till_market_open(passenger.is_otc)
+        await asyncio.sleep(time_till_open)
         return False
 
     # if no access token, sleep 1s (repeat until valid access)

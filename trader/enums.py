@@ -1,7 +1,7 @@
-import datetime
 import enum
+from datetime import datetime
 
-import pytz
+from trader.const import NEY_YORK_TZ
 
 
 class OrderStatus(enum.Enum):
@@ -40,29 +40,28 @@ class MarketSession(enum.Enum):
     EXTENDED = 'EXTENDED'
 
     @staticmethod
-    def current():
-        ny_tz = pytz.timezone("America/New_York")
-        now = datetime.datetime.now(ny_tz)
+    def current(otc=False):
+        now = datetime.now(NEY_YORK_TZ)
 
         if now.weekday() >= 5:
             return None  # no session on weekends
 
-        premarket_start = datetime.datetime(
-            now.year, now.month, now.day, 4, tzinfo=ny_tz)
-        market_open = datetime.datetime(
-            now.year, now.month, now.day, 9, 30, tzinfo=ny_tz)
-        market_close = datetime.datetime(
-            now.year, now.month, now.day, 16, tzinfo=ny_tz)
-        afterhours_end = datetime.datetime(
-            now.year, now.month, now.day, 20, tzinfo=ny_tz)
+        premarket_start = datetime(
+            now.year, now.month, now.day, 4, tzinfo=NEY_YORK_TZ)
+        market_open = datetime(
+            now.year, now.month, now.day, 9, 30, tzinfo=NEY_YORK_TZ)
+        market_close = datetime(
+            now.year, now.month, now.day, 16, tzinfo=NEY_YORK_TZ)
+        afterhours_end = datetime(
+            now.year, now.month, now.day, 20, tzinfo=NEY_YORK_TZ)
 
-        if now < premarket_start or now > afterhours_end:
+        if now < premarket_start or now >= afterhours_end:
             return None
 
-        if market_open <= now <= market_close:
+        if market_open <= now < market_close:
             return MarketSession.REGULAR
 
-        return MarketSession.EXTENDED
+        return None if otc else MarketSession.EXTENDED
 
 
 class PriceType(enum.Enum):

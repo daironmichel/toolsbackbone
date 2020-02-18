@@ -9,6 +9,7 @@ autopep8 = "*"
 pytest = "*"
 pytest-django = "*"
 rope = "*"
+pytest-mock = "*"
 
 [packages]
 django = "*"

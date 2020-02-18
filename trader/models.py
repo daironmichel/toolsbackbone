@@ -254,6 +254,7 @@ class AutoPilotTask(models.Model):
         max_digits=12, decimal_places=2, default=0, blank=True)
 
     tracking_order_id = models.CharField(max_length=250, null=True, blank=True)
+    is_otc = models.BooleanField(default=False, blank=True)
 
     # price used for calculating the loss amount based on the strategy
     # loss percentage. It will increase by the loss_percent amount when

@@ -5,9 +5,10 @@ import os
 from datetime import timedelta
 from decimal import Decimal
 
-import pytz
 from django.utils import timezone
 from rauth import OAuth1Service
+
+from trader.const import NEY_YORK_TZ
 
 from .models import Account, ProviderSession, ServiceProvider
 
@@ -444,8 +445,7 @@ class Etrade:
         return self._process_order_details(order_id, response)
 
     def get_orders(self, account_key, from_date=None, to_date=None):
-        ny_tz = pytz.timezone("America/New_York")
-        now = datetime.datetime.now(ny_tz)
+        now = datetime.datetime.now(NEY_YORK_TZ)
         params = {}
         if not from_date:
             from_date = now - timedelta(days=1)
@@ -559,8 +559,7 @@ class Etrade:
         return self._process_get_position(symbol, positions)
 
     def get_transactions(self, account_key, from_date=None, to_date=None):
-        ny_tz = pytz.timezone("America/New_York")
-        now = datetime.datetime.now(ny_tz)
+        now = datetime.datetime.now(NEY_YORK_TZ)
         params = {}
         if not from_date:
             from_date = now - timedelta(days=7)
@@ -587,3 +586,10 @@ class Etrade:
             "Transaction", [])
 
         return acc_transactions
+
+    @staticmethod
+    def is_otc(quote):
+        primary_exchange = quote.get('All').get('primaryExchange')
+        # TODO: find out all exchange codes
+        # AMEX, NSDQ, NYSE, PK
+        return primary_exchange == 'PK'

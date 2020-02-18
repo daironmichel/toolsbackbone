@@ -189,13 +189,18 @@ class BuyStock(relay.ClientIDMutation):
         if not account:
             account = Account.objects.get(account_key=account_key)
 
+        etrade = get_provider_instance(provider)
+
         if autopilot:
+            quote = etrade.get_quote(symbol)
+            is_otc = etrade.is_otc(quote)
             task = AutoPilotTask(
                 signal=AutoPilotTask.BUY,
                 user=info.context.user,
                 strategy=strategy,
                 provider=provider,
                 account=account,
+                is_otc=is_otc,
                 symbol=symbol,
                 quantity=0,
                 entry_price=price,
@@ -205,7 +210,6 @@ class BuyStock(relay.ClientIDMutation):
             task.save()
             return BuyStock()
 
-        etrade = get_provider_instance(provider)
         last_price = Decimal(price) if price else etrade.get_bid_price(symbol)
 
         limit_price = get_limit_price(OrderAction.BUY, last_price,
@@ -300,15 +304,16 @@ class StopProfit(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, symbol, provider_id, 
+    def mutate_and_get_payload(cls, root, info, symbol, provider_id,
                                strategy_id=None, account_id=None):
         account = Account.objects.get(id=account_id) if account_id else None
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
-        
+
         strategy = None
         if strategy_id:
-            strategy = info.context.user.strategies.filter(id=strategy_id).first()
+            strategy = info.context.user.strategies.filter(
+                id=strategy_id).first()
             if not strategy:
                 return StopProfit(
                     error=StopProfitError.STRATEGY_NOT_FOUND,
@@ -333,7 +338,8 @@ class StopProfit(relay.ClientIDMutation):
             )
 
         etrade = get_provider_instance(provider)
-        position_quantity, entry_price = etrade.get_position(account_key, symbol)
+        position_quantity, entry_price = etrade.get_position(
+            account_key, symbol)
 
         if strategy:
             profit_amount = entry_price * (strategy.profit_percent / 100)
@@ -403,11 +409,11 @@ class StopLoss(relay.ClientIDMutation):
 
         etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
-        last_price = etrade.get_ask_price(symbol)
+        last_price = etrade.get_bid_price(symbol)
         stop_price = get_round_price(
-            last_price - (last_price * Decimal('0.023')))
+            last_price - (last_price * Decimal('0.02')))
         limit_price = get_limit_price(
-            OrderAction.SELL, stop_price, margin=Decimal('0.01'))
+            OrderAction.SELL, stop_price, margin=Decimal('0.02'))
 
         order_params = {
             'account_key': account_key,
@@ -619,11 +625,15 @@ class AutoPilotON(relay.ClientIDMutation):
             return AutoPilotON(error=AutoPilotONError.NO_POSITION_FOR_SYMBOL,
                                error_message=f'No position found for {symbol}. Position: {quantity}@{entry_price}')
 
+        quote = etrade.get_quote(symbol)
+        is_otc = etrade.is_otc(quote)
+
         task = AutoPilotTask(
             user=user,
             strategy=strategy,
             provider=provider,
             account=account,
+            is_otc=is_otc,
             symbol=symbol,
             quantity=quantity,
             entry_price=entry_price,
