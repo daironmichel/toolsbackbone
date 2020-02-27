@@ -21,7 +21,12 @@ class DatabaseId(graphene.Interface):
 
 class SettingsNode(DjangoObjectType):
     class Meta:
-        exclude_fields = ('user',)
+        # removing user from excluded fields due to following warning:
+        # UserWarning: Field name "user" matches an attribute on Django model
+        # "trader.Settings" but it's not a model field so Graphene cannot
+        # determine what type it should be. Either define the type of the field
+        # on DjangoObjectType "SettingsNode" or remove it from the "fields" list.
+        # exclude_fields = ('user',)
         model = Settings
         interfaces = (relay.Node, DatabaseId)
 
@@ -33,7 +38,12 @@ class SettingsNode(DjangoObjectType):
 
 class TradingStrategyNode(DjangoObjectType):
     class Meta:
-        exclude_fields = ('user',)
+        # removing user from excluded fields due to following warning:
+        # UserWarning: Field name "user" matches an attribute on Django model
+        # "trader.TradingStrategy" but it's not a model field so Graphene cannot
+        # determine what type it should be. Either define the type of the field
+        # on DjangoObjectType "TradingStrategyNode" or remove it from the "fields" list.
+        # exclude_fields = ('user',)
         model = TradingStrategy
         interfaces = (relay.Node, DatabaseId)
 
@@ -55,7 +65,7 @@ class ProviderSessionNode(DjangoObjectType):
     status = graphene.Field(SessionStatus)
 
     class Meta:
-        exclude_fields = ('provider',)
+        # exclude_fields = ('provider',)
         model = ProviderSession
         interfaces = (relay.Node, DatabaseId)
 
@@ -72,7 +82,12 @@ class ServiceProviderNode(DjangoObjectType):
     session_status = graphene.Field(SessionStatus, required=True)
 
     class Meta:
-        exclude_fields = ('user',)
+        # removing user from excluded fields due to following warning:
+        # UserWarning: Field name "user" matches an attribute on Django model
+        # "trader.ServiceProvider" but it's not a model field so Graphene cannot
+        # determine what type it should be. Either define the type of the field
+        # on DjangoObjectType "ServiceProviderNode" or remove it from the "fields" list.
+        # exclude_fields = ('user',)
         model = ServiceProvider
         interfaces = (relay.Node, DatabaseId)
 
@@ -149,7 +164,12 @@ class BrokerNode(DjangoObjectType):
     accounts = relay.ConnectionField(AccountConnection, required=True)
 
     class Meta:
-        exclude_fields = ('user',)
+        # removing user from excluded fields due to following warning:
+        # UserWarning: Field name "user" matches an attribute on Django model
+        # "trader.AutoPilotTask" but it's not a model field so Graphene cannot
+        # determine what type it should be. Either define the type of the field
+        # on DjangoObjectType "AutoPilotTaskNode" or remove it from the "fields" list.
+        # exclude_fields = ('user',)
         model = Broker
         interfaces = (relay.Node, DatabaseId)
 
@@ -181,7 +201,12 @@ class BrokerConnection(NonNullConnection):
 
 class AutoPilotTaskNode(DjangoObjectType):
     class Meta:
-        exclude_fields = ('user',)
+        # removing user from excluded fields due to following warning:
+        # UserWarning: Field name "user" matches an attribute on Django model
+        # "trader.AutoPilotTask" but it's not a model field so Graphene cannot
+        # determine what type it should be. Either define the type of the field
+        # on DjangoObjectType "AutoPilotTaskNode" or remove it from the "fields" list.
+        # exclude_fields = ('user',)
         model = AutoPilotTask
         interfaces = (relay.Node, DatabaseId)
 
@@ -293,8 +318,8 @@ class OrderType(graphene.ObjectType):
             raise ValueError(
                 f'Expecting a value for limit_price. Got: "{limit_price}"')
         value = Decimal(str(limit_price))
-        if value.adjusted() > 0:
-            return value.quantize(Decimal('0.01'))
+        # if value.adjusted() > 0:
+        #     return value.quantize(Decimal('0.01'))
         return value
 
     def resolve_execution_price(self, info, **kwargs):
@@ -302,8 +327,8 @@ class OrderType(graphene.ObjectType):
         instrument = details.get("Instrument")[0]
         execution_price = instrument.get("averageExecutionPrice", 0)
         value = Decimal(str(execution_price))
-        if value.adjusted() > 0:
-            return value.quantize(Decimal('0.01'))
+        # if value.adjusted() > 0:
+        #     return value.quantize(Decimal('0.01'))
         return value
 
     def resolve_status(self, info, **kwargs):

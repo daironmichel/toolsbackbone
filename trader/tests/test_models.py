@@ -3,7 +3,7 @@ from decimal import Decimal
 from trader.models import AutoPilotTask, TradingStrategy
 
 
-class TestAutoPilot:
+class TestAutoPilotTask:
     def test_loss_amount__returns_correct_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
         auto_pilot = AutoPilotTask(strategy=strat, base_price=Decimal('100'))
@@ -53,6 +53,17 @@ class TestAutoPilot:
         assert profit_amount1 == Decimal('0.363')
         assert profit_amount2 == Decimal('0.0363')
         assert profit_amount3 == Decimal('0.00363')
+
+    def test_profit_price__returns_correct_value(self):
+        strat = TradingStrategy(profit_percent=Decimal('8'))
+        auto_pilot = AutoPilotTask(
+            strategy=strat,
+            base_price=Decimal('10'),
+            ref_price=Decimal('10'))
+
+        profit_price = auto_pilot.profit_price
+
+        assert profit_price == Decimal('10.8')
 
     def test_stop_price__returns_correct_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))

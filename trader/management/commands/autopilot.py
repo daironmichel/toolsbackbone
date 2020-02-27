@@ -2,16 +2,20 @@ import asyncio
 import logging
 import signal
 import time
+from datetime import datetime, timedelta
 from decimal import Decimal
 
+import pytz
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.utils.crypto import get_random_string
 
 from trader.aio.db import database_sync_to_async
 from trader.aio.providers import AsyncEtrade
-from trader.enums import MarketSession
+from trader.enums import MarketSession, OrderAction, OrderStatus, PriceType
 from trader.models import AutoPilotTask, ProviderSession, ServiceProvider
-from trader.utils import time_till_market_open
+from trader.providers import ServiceError
+from trader.utils import get_limit_price, time_till_market_open
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.autopilot")
@@ -23,7 +27,7 @@ def get_passengers():
     return list(
         AutoPilotTask.objects.all()
         .select_related('provider', 'provider__broker', 'strategy', 'account', 'user')
-        .filter(status=AutoPilotTask.CREATED)
+        .filter(status=AutoPilotTask.READY)
     )
 
 
@@ -59,7 +63,30 @@ async def get_provider(pilot: AutoPilotTask):
     return AsyncEtrade(pilot.provider, stored_session)
 
 
-async def buy_position(pilot_name: str, passenger: AutoPilotTask):
+async def place_sell_order(passenger: AutoPilotTask, sell_price: Decimal,
+                           etrade: AsyncEtrade):
+    limit_price = get_limit_price(
+        OrderAction.SELL, sell_price, margin=Decimal('0.01'))
+    order_params = {
+        'account_key': passenger.account.account_key,
+        'market_session': MarketSession.current().value,
+        'action': OrderAction.SELL.value,
+        'symbol': passenger.symbol,
+        'price_type': PriceType.LIMIT.value,
+        'quantity': passenger.quantity,
+        'limit_price': limit_price
+    }
+
+    preview_ids = await etrade.preview_order(
+        order_client_id=get_random_string(length=20), **order_params)
+    order_id = await etrade.place_order(order_client_id=get_random_string(
+        length=20), preview_ids=preview_ids, **order_params)
+
+    # passenger.tracking_order_placed_at = datetime.now()
+    return order_id
+
+
+async def buy_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
     # get position
     # get quote
     # place order
@@ -69,20 +96,155 @@ async def buy_position(pilot_name: str, passenger: AutoPilotTask):
     await asyncio.sleep(3)
 
 
-async def sell_position(pilot_name: str, passenger: AutoPilotTask):
-    # get position
-    # get quote
-    # place order
-    # watch order until executed or 5sec
-    # cancel order if 5sec passed and no fill or partial
-    # repeat untill out of position
-    await asyncio.sleep(3)
+async def commit_sell(passenger: AutoPilotTask, sell_price: Decimal,
+                      etrade: AsyncEtrade):
+    order_id = await place_sell_order(passenger, sell_price, etrade)
+
+    update_fields = {'state': AutoPilotTask.SELLING,
+                     'tracking_order_id': order_id}
+    await update_passenger(passenger, update_fields)
 
 
-async def track_position(pilot_name: str, passenger: AutoPilotTask):
-    # get position
-    # get quote
-    pass
+async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
+    quote = await etrade.get_quote(passenger.symbol)
+    # last = Decimal(quote.get('All').get('lastTrade'))
+    bid = Decimal(quote.get('All').get('bid'))
+    ask = Decimal(quote.get('All').get('ask'))
+
+    if not passenger.tracking_order_id:
+        await commit_sell(passenger, ask, etrade)
+        return
+
+    order = await etrade.get_order_details(passenger.account.account_key,
+                                           passenger.tracking_order_id,
+                                           passenger.symbol)
+
+    if not order:
+        logger.info("%s %s unable to track sell order %s. NOT FOUND.",
+                    PREFIX, pilot_name, passenger.tracking_order_id)
+        update_fields = {
+            'status': AutoPilotTask.PAUSED,
+            'state': AutoPilotTask.ERROR,
+            'error_message': f'unable to track selling order {passenger.tracking_order_id)}. NOT FOUND'}
+        await update_passenger(passenger, update_fields)
+        return
+
+    details = order.get("OrderDetail")[0]
+    status = OrderStatus(details.get("status"))
+    limit_price = details.get("limitPrice")
+
+    if status in (OrderStatus.OPEN, OrderStatus.PARTIAL):
+        placed_at = datetime.fromtimestamp(
+            details.get("placedTime")/1000, tz=pytz.utc)
+        elapsed_time = placed_at - datetime.now(tz=pytz.utc)
+        if elapsed_time >= timedelta(seconds=5) and (limit_price < bid or limit_price > ask):
+            try:
+                await etrade.cancel_order(passenger.account.account_key,
+                                          passenger.tracking_order_id)
+            except ServiceError as e:
+                if e.error_code == 5001:
+                    # This order is currently being executed
+                    # or rejected. It cannot be cancelled.
+                    return
+
+    elif status == OrderStatus.CANCEL_REQUESTED:
+        logger.debug("%s %s cancel for order %s has been requested. waiting...",
+                     PREFIX, pilot_name, passenger.tracking_order_id)
+
+    elif status == OrderStatus.CANCELLED:
+        logger.debug("%s %s order %s cancelled. placing new order...",
+                     PREFIX, pilot_name, passenger.tracking_order_id)
+        instrument = details.get("Instrument")[0]
+        ordered_quantity = instrument.get("orderedQuantity")
+        filled_quantity = instrument.get("filledQuantity") or 0
+        pending_quantity = int(ordered_quantity) - int(filled_quantity)
+        update_fields = {'quantity': pending_quantity}
+        await update_passenger(passenger, update_fields)
+        await commit_sell(passenger, ask, etrade)
+
+    elif status == OrderStatus.REJECTED:
+        logger.warning("%s %s order %s rejected. this case is not being handled.",
+                       PREFIX, pilot_name, passenger.tracking_order_id)
+
+    elif status == OrderStatus.EXPIRED:
+        logger.warning("%s %s order %s expired. this case is not being handled.",
+                       PREFIX, pilot_name, passenger.tracking_order_id)
+
+    elif status == OrderStatus.EXECUTED:
+        # get possition
+        quantity = await etrade.get_position_quantity(passenger.account.account_key,
+                                                      passenger.symbol)
+        if quantity in (None, 0):
+            update_fields = {'status': AutoPilotTask.DONE}
+            await update_passenger(passenger, update_fields)
+        else:
+            # TODO: place sell order for scale out quantity
+            update_fields = {'quantity': quantity}
+            await update_passenger(passenger, update_fields)
+            await commit_sell(passenger, ask, etrade)
+    else:
+        logger.error("%s %s unhandled status %s for order %s",
+                     PREFIX, pilot_name, status, passenger.tracking_order_id)
+        update_fields = {
+            'status': AutoPilotTask.PAUSED,
+            'state': AutoPilotTask.ERROR,
+            'error_message': f'unhandled status {status} for order {passenger.tracking_order_id)}'}
+        await update_passenger(passenger, update_fields)
+
+
+async def follow_strategy(pilot_name: str, passenger: AutoPilotTask,
+                          etrade: AsyncEtrade, quote: dict):
+    bid = Decimal(quote.get('All').get('bid'))
+    ask = Decimal(quote.get('All').get('ask'))
+
+    if bid < passenger.loss_price or ask > passenger.profit_price:
+        if bid < passenger.loss_price:
+            logger.debug("%s %s bid reached the loss price, placing sell order at %s",
+                         PREFIX, pilot_name, ask)
+        else:
+            logger.debug("%s %s ask reached the profit price, placing sell order at %s",
+                         PREFIX, pilot_name, ask)
+
+        order_id = await place_sell_order(passenger, ask, etrade)
+
+        update_fields = {'state': AutoPilotTask.SELLING,
+                         'tracking_order_id': order_id}
+        await update_passenger(passenger, update_fields)
+
+
+async def minimize_loss(pilot_name: str, passenger: AutoPilotTask,
+                        etrade: AsyncEtrade, quote: dict):
+    await follow_strategy(pilot_name, passenger, etrade, quote)
+
+    if passenger.state == AutoPilotTask.SELLING:
+        return
+
+    bid = Decimal(quote.get('All').get('bid'))
+    ref_price_thresdhold = passenger.loss_ref_price + passenger.loss_amount * 2
+    if bid > ref_price_thresdhold:
+        update_fields = {'loss_ref_price': ref_price_thresdhold}
+        await update_passenger(passenger, update_fields)
+
+
+async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
+    logger.debug("%s %s tracking.",
+                 PREFIX, pilot_name)
+
+    quote = await etrade.get_quote(passenger.symbol)
+    # last = Decimal(quote.get('All').get('lastTrade'))
+    bid = Decimal(quote.get('All').get('bid'))
+    ask = Decimal(quote.get('All').get('ask'))
+
+    if passenger.modifier == AutoPilotTask.FOLLOW_STRATEGY:
+        await follow_strategy(pilot_name, passenger, etrade, quote)
+    elif passenger.modifier == AutoPilotTask.MINIMIZE_LOSS:
+        await minimize_loss(pilot_name, passenger, etrade, quote)
+    elif passenger.modifier == AutoPilotTask.MAXIMIZE_PROFIT:
+        await follow_strategy(pilot_name, passenger, etrade, quote)
+    elif passenger.modifier == AutoPilotTask.MIN_LOSS_MAX_PROFIT:
+        await follow_strategy(pilot_name, passenger, etrade, quote)
+    else:
+        await follow_strategy(pilot_name, passenger, etrade, quote)
 
 
 async def green_light(pilot_name: str, passenger: AutoPilotTask,
@@ -95,7 +257,7 @@ async def green_light(pilot_name: str, passenger: AutoPilotTask,
         await update_passenger(passenger, {'status': AutoPilotTask.DONE})
         return False
 
-    # if no market session, sleep 1h (repeat until market opens)
+    # if no market session, sleep until market opens
     if MarketSession.current(passenger.is_otc) is None:
         logger.debug("%s %s market is closed. sleeping 1h",
                      PREFIX, pilot_name)
@@ -128,27 +290,14 @@ async def driver(name: str, queue: asyncio.Queue):
                 continue
 
             if override_signal == AutoPilotTask.BUY or passenger.state == AutoPilotTask.BUYING:
-                await buy_position(name, passenger)
+                await buy_position(name, passenger, etrade)
             elif override_signal == AutoPilotTask.SELL or passenger.state == AutoPilotTask.SELLING:
-                await sell_position(name, passenger)
+                await sell_position(name, passenger, etrade)
             else:
-                await track_position(name, passenger)
+                await track_position(name, passenger, etrade)
 
-            # get quote
-            # get position
-            # determine if needs to sell
-            # if sell, go into selling mode
-
-            # for _ in range(3):
-            #     print(f'{pilot.symbol + ":":<6} getting quote...')
-            #     start = time.perf_counter()
-            #     quote = await etrade.get_quote(pilot.symbol)
-            #     elapsed = time.perf_counter() - start
-            #     last_price = Decimal(str(quote.get("All").get("lastTrade")))
-            #     print(f'{pilot.symbol + ":":<6} {last_price} {"":>20} {elapsed:0.2f} sec')
-            #     print(f'{pilot.symbol + ":":<6} sleeping 1 sec')
-            #     await asyncio.sleep(1)
-        await delete_passenger(passenger)
+        if passenger.status == AutoPilotTask.DONE:
+            await delete_passenger(passenger)
     except asyncio.CancelledError:
         logger.info("%s %s stopping...", PREFIX, name)
 
@@ -156,8 +305,13 @@ async def driver(name: str, queue: asyncio.Queue):
         logger.error("%s %s %s: %s", PREFIX, name,
                      type(exception).__name__,
                      str(exception), exc_info=1)
+        update_fields = {'status': AutoPilotTask.PAUSED,
+                         'state': AutoPilotTask.ERROR,
+                         'error_message': str(exception)}
+        await update_passenger(passenger, update_fields)
     finally:
-        logger.info("%s %s done.", PREFIX, name)
+        logger.info("%s %s %s.", PREFIX, name,
+                    AutoPilotTask.TASK_STATUS[passenger.status][1])
         queue.task_done()
 
 

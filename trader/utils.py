@@ -43,15 +43,18 @@ def time_till_market_open(otc=False):
                          open_hour, open_minute, tzinfo=NEY_YORK_TZ)
     close_time = datetime(now.year, now.month, now.day,
                           close_hour, close_minute, tzinfo=NEY_YORK_TZ)
-    if open_time <= now < close_time:  # market is open
+
+    # market is open
+    if open_time.weekday() < 5 and open_time <= now < close_time:
         return 0
 
+    # if market already closed today, open is next day
     if close_time <= now:
-        # if market already closed today, open is next day
         open_time += timedelta(days=1)
-        if open_time.weekday() == 6:
-            # if next day is Saturday, open is on Monday
-            open_time += timedelta(days=2)
+
+    # if it's a weekend, open is on Monday
+    if open_time.weekday() >= 5:
+        open_time += timedelta(days=7 - open_time.weekday())
 
     time_till_open = open_time - now
     return time_till_open.total_seconds()

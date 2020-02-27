@@ -20,7 +20,9 @@ logger = logging.getLogger("trader.providers")
 
 
 class ServiceError(Exception):
-    pass
+    def __init__(self, error_code: str, *args):
+        super().__init__(*args)
+        self.error_code = error_code
 
 
 def get_provider_instance(config: ServiceProvider):
@@ -241,11 +243,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Quote symbol failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Quote symbol failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Quote symbol failed. {msg}')
 
         quote_respnse = data.get("QuoteResponse", {})
         quotes = quote_respnse.get("QuoteData", [])
@@ -253,11 +256,12 @@ class Etrade:
         if not quotes:
             if messages:
                 error = messages[0]
+                code = error.get("code", None)
+                msg = error.get("description", "")
                 logger.error('%s | Quote symbol failed. Code: %s. Message: %s',
-                             response.status_code, error.get(
-                                 "code", None), error.get("description", None), extra=data)
-                raise ServiceError(
-                    f'Quote symbol failed. {error.get("type")} {error.get("code")}: {error.get("description", "")}')
+                             response.status_code, code, msg, extra=data)
+                raise ServiceError(code,
+                                   f'Quote symbol failed. {error.get("type")} {code}: {msg}')
             else:
                 return None
         elif messages:
@@ -330,11 +334,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Preview order failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Preview order failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Preview order failed. {msg}')
 
         if not data:
             return None
@@ -386,11 +391,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Place order failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Place order failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Place order failed. {msg}')
 
         if not data:
             return None
@@ -417,7 +423,7 @@ class Etrade:
         return self._process_place_order(response)
 
     def _prepare_order_details(self, symbol):
-        params = {"symbol": symbol}
+        params = {"symbol": symbol, "count": 1}
         headers = {"consumerkey": self.config.consumer_key}
         return headers, params
 
@@ -429,7 +435,10 @@ class Etrade:
 
         if response.status_code != 200:
             logger.error('Order Details Failed.', extra=data)
-            raise ServiceError('Order Details Failed.')
+            error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
+            raise ServiceError(code, f'Order Details Failed. {msg}')
 
         orders_data = data.get("OrdersResponse", {}).get("Order", [])
         for order in orders_data:
@@ -464,11 +473,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Get orders failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Get orders failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Get orders failed. {msg}')
 
         return data.get("OrdersResponse", {}).get("Order", None)
 
@@ -490,11 +500,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Cancel order failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Cancel order failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Cancel order failed. {msg}')
 
         return True
 
@@ -513,11 +524,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Get positions failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Get positions failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Get positions failed. {msg}')
 
         acc_portfolio = data.get("PortfolioResponse", {}).get(
             "AccountPortfolio", [])
@@ -577,11 +589,12 @@ class Etrade:
 
         if response.status_code != 200:
             error = data.get("Error", {})
+            code = error.get("code", None)
+            msg = error.get("message", "")
             logger.error('%s | Get transactions failed. Code: %s. Message: %s',
-                         response.status_code, error.get(
-                             "code", None), error.get("message", None), extra=data)
-            raise ServiceError(
-                f'Get transactions failed. {error.get("message", "")}')
+                         response.status_code, code, msg, extra=data)
+            raise ServiceError(code,
+                               f'Get transactions failed. {msg}')
 
         acc_transactions = data.get("TransactionListResponse", {}).get(
             "Transaction", [])

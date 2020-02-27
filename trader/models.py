@@ -10,19 +10,6 @@ from trader.utils import get_round_price
 # Create your models here.
 
 
-class Settings(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name='settings')
-    refresh_rate = models.IntegerField(default=0)
-    default_broker = models.ForeignKey(
-        'Broker', on_delete=models.PROTECT, null=True, default=None, related_name='+')
-    default_strategy = models.ForeignKey(
-        'TradingStrategy', on_delete=models.PROTECT, null=True, default=None, related_name='+')
-
-    def __str__(self):
-        return f'<Settings: {self.id}, user_id: {self.user_id}>'
-
-
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
     exposure_percent = models.DecimalField(
@@ -191,15 +178,17 @@ class ProviderSession(models.Model):
 
 
 class AutoPilotTask(models.Model):
-    CREATED = 0  # default
+    READY = 0  # default
     QUEUED = 1
     RUNNING = 2
     DONE = 3
+    PAUSED = 4
     TASK_STATUS = [
-        (CREATED, "Created"),
+        (READY, "Ready"),
         (QUEUED, "Queued"),
         (RUNNING, "Running"),
         (DONE, "Done"),
+        (PAUSED, "Paused"),
     ]
 
     # Signals used to force behavior of the task
@@ -218,23 +207,27 @@ class AutoPilotTask(models.Model):
     BUYING = 0
     WATCHING = 1  # default
     SELLING = 2
+    ERROR = 3
     STATES = [
         (BUYING, "Buying Mode"),
         (WATCHING, "Watching Mode"),
         (SELLING, "Selling Mode"),
+        (ERROR, "Error Mode"),
     ]
 
     # modifiers that determine the behabior towards profit/loss
     FOLLOW_STRATEGY = 0  # follow strategy as is (default)
-    MAXIMIZE_PROFIT = 1  # try to get the most profit by moving up the stop price
+    MAXIMIZE_PROFIT = 1  # try to get the most profit by moving up the stop/profit price
     MINIMIZE_LOSS = 2  # try to at least brake even and have a smaller loss threshold
+    MIN_LOSS_MAX_PROFIT = 3  # hybrid of MAXIMIZE_PROFIT and MINIMIZE_LOSS
     MODS = [
         (FOLLOW_STRATEGY, "Follow Strategy"),
         (MAXIMIZE_PROFIT, "Maximize Profit"),
         (MINIMIZE_LOSS, "Minimize Loss"),
+        (MIN_LOSS_MAX_PROFIT, "Minimize Loss, Maximize Profit"),
     ]
 
-    status = models.SmallIntegerField(choices=TASK_STATUS, default=CREATED)
+    status = models.SmallIntegerField(choices=TASK_STATUS, default=READY)
     signal = models.SmallIntegerField(choices=SIGNALS, default=AUTO)
     state = models.SmallIntegerField(choices=STATES, default=WATCHING)
     modifier = models.SmallIntegerField(choices=MODS, default=FOLLOW_STRATEGY)
@@ -252,19 +245,27 @@ class AutoPilotTask(models.Model):
     quantity = models.IntegerField(default=0, blank=True)
     entry_price = models.DecimalField(
         max_digits=12, decimal_places=2, default=0, blank=True)
-
-    tracking_order_id = models.CharField(max_length=250, null=True, blank=True)
     is_otc = models.BooleanField(default=False, blank=True)
 
+    error_message = models.CharField(max_length=500, default='', blank=True)
+
+    # current order being tracked. if no order is being tracked
+    # this field should be empty
+    tracking_order_id = models.CharField(max_length=250, null=True, blank=True)
+
     # price used for calculating the loss amount based on the strategy
-    # loss percentage. It will increase by the loss_percent amount when
-    # profit_percent + loss_percent is reached.
+    # loss percentage. It may increase to accommodate for higher price.
+    # for example: when maximazing profit a 3% drop at the highest profit point
+    # is a much bigger amount than a 3% drop at the entry price
     base_price = models.DecimalField(max_digits=12, decimal_places=2)
 
     # price used to determine the stop price at which the position
-    # should be exited. It will increase by 1/2 loss_percent when
-    # that price level is held for a certain amount of time.
-    ref_price = models.DecimalField(max_digits=12, decimal_places=2)
+    # should be sold for a profit. It will increase depending on modifier.
+    profit_ref_price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # price used to determine the stop price at which the position
+    # should be sold for a loss. It will increase depending on modifier.
+    loss_ref_price = models.DecimalField(max_digits=12, decimal_places=2)
 
     # timestamp used to determine if ref_price should be moved up
     # after certain amount of time have passed where the stock
@@ -283,5 +284,24 @@ class AutoPilotTask(models.Model):
         return get_round_price(self.base_price * (self.strategy.profit_percent / Decimal('100')))
 
     @property
-    def stop_price(self) -> Decimal:
-        return get_round_price(self.ref_price - self.loss_amount)
+    def loss_price(self) -> Decimal:
+        return get_round_price(self.stop_ref_price - self.loss_amount)
+
+    @property
+    def profit_price(self) -> Decimal:
+        return get_round_price(self.profit_ref_price + self.profit_amount)
+
+
+class Settings(models.Model):
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='settings')
+    refresh_rate = models.IntegerField(default=0)
+    default_broker = models.ForeignKey(
+        Broker, on_delete=models.PROTECT, null=True, default=None, related_name='+')
+    default_strategy = models.ForeignKey(
+        TradingStrategy, on_delete=models.PROTECT, null=True, default=None, related_name='+')
+    default_autopilot_modifier = models.SmallIntegerField(
+        choices=AutoPilotTask.MODS, default=AutoPilotTask.FOLLOW_STRATEGY)
+
+    def __str__(self):
+        return f'<Settings: {self.id}, user_id: {self.user_id}>'

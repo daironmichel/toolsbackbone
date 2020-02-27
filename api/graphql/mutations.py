@@ -194,6 +194,9 @@ class BuyStock(relay.ClientIDMutation):
         if autopilot:
             quote = etrade.get_quote(symbol)
             is_otc = etrade.is_otc(quote)
+            user = info.context.user
+            settings = Settings.objects.filter(user_id=user.id).first()
+            default_modifier = settings.default_autopilot_modifier if settings else None
             task = AutoPilotTask(
                 signal=AutoPilotTask.BUY,
                 user=info.context.user,
@@ -205,8 +208,10 @@ class BuyStock(relay.ClientIDMutation):
                 quantity=0,
                 entry_price=price,
                 base_price=price,
-                ref_price=price,
-                ref_time=datetime.now)
+                loss_ref_price=price,
+                profit_ref_price=price,
+                ref_time=datetime.now,
+                modifier=default_modifier)
             task.save()
             return BuyStock()
 
@@ -550,7 +555,7 @@ class AutoPilotONError(graphene.Enum):
     PROVIDER_REQUIRED = 'PROVIDER_REQUIRED'
     ACCOUNT_REQUIRED = 'ACCOUNT_REQUIRED'
     STRATEGY_REQUIRED = 'STRATEGY_REQUIRED'
-    NO_POSITION_FOR_SYMBOL = 'NO_POSITION_FOR_SYMBOL'
+    ALREADY_EXISTS = 'ALREADY_EXISTS'
 
 
 class AutoPilotON(relay.ClientIDMutation):
@@ -573,6 +578,12 @@ class AutoPilotON(relay.ClientIDMutation):
                 .select_related('default_stategy', 'default_broker__default_provider') \
                 .first()
         return self._settings
+
+    def get_default_modifier(self, user):
+        settings = self._get_settings(user)
+        if not settings:
+            return None
+        return settings.default_autopilot_modifier
 
     def get_default_strategy(self, user):
         settings = self._get_settings(user)
@@ -619,6 +630,12 @@ class AutoPilotON(relay.ClientIDMutation):
             return AutoPilotON(error=AutoPilotONError.ACCOUNT_REQUIRED,
                                error_message='Either set the account_id param or configure a default.')
 
+        if AutoPilotTask.objects.filter(symbol=symbol).exists():
+            return AutoPilotON(error=AutoPilotONError.ALREADY_EXISTS,
+                               error_message=f'Autopilot for {symbol} already exists.')
+
+        default_modifier = root.get_default_modifier(user)
+
         etrade = get_provider_instance(provider)
         quantity, entry_price = etrade.get_position(account.symbol, symbol)
         if not quantity or not entry_price:
@@ -638,8 +655,10 @@ class AutoPilotON(relay.ClientIDMutation):
             quantity=quantity,
             entry_price=entry_price,
             base_price=entry_price,
-            ref_price=entry_price,
-            ref_time=datetime.now)
+            loss_ref_price=entry_price,
+            profit_ref_price=entry_price,
+            ref_time=datetime.now,
+            modifier=default_modifier)
 
         task.save()
         return AutoPilotON()
