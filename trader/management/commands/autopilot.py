@@ -125,7 +125,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         update_fields = {
             'status': AutoPilotTask.PAUSED,
             'state': AutoPilotTask.ERROR,
-            'error_message': f'unable to track selling order {passenger.tracking_order_id)}. NOT FOUND'}
+            'error_message': f'unable to track selling order {passenger.tracking_order_id}. NOT FOUND'}
         await update_passenger(passenger, update_fields)
         return
 
@@ -188,7 +188,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         update_fields = {
             'status': AutoPilotTask.PAUSED,
             'state': AutoPilotTask.ERROR,
-            'error_message': f'unhandled status {status} for order {passenger.tracking_order_id)}'}
+            'error_message': f'unhandled status {status} for order {passenger.tracking_order_id}'}
         await update_passenger(passenger, update_fields)
 
 
@@ -232,8 +232,8 @@ async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: Asyn
 
     quote = await etrade.get_quote(passenger.symbol)
     # last = Decimal(quote.get('All').get('lastTrade'))
-    bid = Decimal(quote.get('All').get('bid'))
-    ask = Decimal(quote.get('All').get('ask'))
+    # bid = Decimal(quote.get('All').get('bid'))
+    # ask = Decimal(quote.get('All').get('ask'))
 
     if passenger.modifier == AutoPilotTask.FOLLOW_STRATEGY:
         await follow_strategy(pilot_name, passenger, etrade, quote)

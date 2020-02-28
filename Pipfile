@@ -24,4 +24,4 @@ httpx = "==0.11.1"
 pytest-asyncio = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.8.1"
