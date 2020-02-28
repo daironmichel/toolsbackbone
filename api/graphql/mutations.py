@@ -576,7 +576,7 @@ class AutoPilotON(relay.ClientIDMutation):
     def _get_settings(cls, info):
         if not hasattr(info, 'settings'):
             info.settings = Settings.objects.filter(user_id=info.context.user.id) \
-                .select_related('default_stategy', 'default_broker__default_provider') \
+                .select_related('default_strategy', 'default_broker__default_provider') \
                 .first()
         return info.settings
 
