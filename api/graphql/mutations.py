@@ -698,5 +698,5 @@ class Mutation(graphene.ObjectType):
     stop_profit = StopProfit.Field(required=True)
     cancel_order = CancelOrder.Field(required=True)
     save_settings = SaveSettings.Field(required=True)
-    autopilot_ON = AutoPilotON.Field(required=True)
-    autopilot_OFF = AutoPilotOFF.Field(required=True)
+    auto_pilot_ON = AutoPilotON.Field(required=True)
+    auto_pilot_OFF = AutoPilotOFF.Field(required=True)

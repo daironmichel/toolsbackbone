@@ -199,7 +199,25 @@ class BrokerConnection(NonNullConnection):
         node = BrokerNode
 
 
+class AutoPilotTaskStatus(graphene.Enum):
+    READY = 0  # default
+    QUEUED = 1
+    RUNNING = 2
+    DONE = 3
+    PAUSED = 4
+
+
+class AutoPilotTaskState(graphene.Enum):
+    BUYING = 0
+    WATCHING = 1  # default
+    SELLING = 2
+    ERROR = 3
+
+
 class AutoPilotTaskNode(DjangoObjectType):
+    status = graphene.Field(AutoPilotTaskStatus, required=True)
+    state = graphene.Field(AutoPilotTaskState, required=True)
+
     class Meta:
         # removing user from excluded fields due to following warning:
         # UserWarning: Field name "user" matches an attribute on Django model
