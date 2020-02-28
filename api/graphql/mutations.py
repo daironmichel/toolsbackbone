@@ -573,40 +573,40 @@ class AutoPilotON(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def _get_settings(cls, context, user):
+    def _get_settings(cls, context):
         if not context.settings:
-            context.settings = Settings.objects.filter(user_id=user.id) \
+            context.settings = Settings.objects.filter(user_id=context.user.id) \
                 .select_related('default_stategy', 'default_broker__default_provider') \
                 .first()
         return context.settings
 
     @classmethod
-    def get_default_modifier(cls, context, user):
-        settings = cls._get_settings(context, user)
+    def get_default_modifier(cls, context):
+        settings = cls._get_settings(context)
         if not settings:
             return None
         return settings.default_autopilot_modifier
 
     @classmethod
-    def get_default_strategy(cls, context, user):
-        settings = cls._get_settings(context, user)
+    def get_default_strategy(cls, context):
+        settings = cls._get_settings(context)
         if not settings:
             return None
         return settings.default_strategy
 
     @classmethod
-    def get_default_provider(cls, context, user):
-        settings = cls._get_settings(context, user)
+    def get_default_provider(cls, context):
+        settings = cls._get_settings(context)
         if not settings:
             return None
         return settings.default_broker.default_provider
 
     @classmethod
-    def get_default_account(cls, context, user):
-        settings = cls._get_settings(context, user)
+    def get_default_account(cls, context):
+        settings = cls._get_settings(context)
         if not settings:
             return None
-        default_provider = cls._default_provider(user)
+        default_provider = cls.get_default_provider(context)
         if not default_provider:
             return None
         return Account.objects.filter(account_key=default_provider.account_key)
@@ -615,22 +615,23 @@ class AutoPilotON(relay.ClientIDMutation):
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id=None,
                                provider_id=None, account_id=None):
 
-        user = info.context.user
+        context = info.context
+        user = context.user
 
         strategy = user.trading_strategies.get(
-            id=strategy_id) if strategy_id else root.get_default_strategy(user)
+            id=strategy_id) if strategy_id else cls.get_default_strategy(context)
         if not strategy:
             return AutoPilotON(error=AutoPilotONError.STRATEGY_REQUIRED,
                                error_message='Either set the strategy_id param or configure a default.')
 
         provider = user.service_providers.get(
-            id=provider_id) if provider_id else root.get_default_privider(user)
+            id=provider_id) if provider_id else cls.get_default_privider(context)
         if not provider:
             return AutoPilotON(error=AutoPilotONError.PROVIDER_REQUIRED,
                                error_message='Either set the provider_id param or configure a default.')
 
         account = user.accounts.get(
-            id=account_id) if account_id else root.get_default_account(user)
+            id=account_id) if account_id else cls.get_default_account(context)
         if not account:
             return AutoPilotON(error=AutoPilotONError.ACCOUNT_REQUIRED,
                                error_message='Either set the account_id param or configure a default.')
