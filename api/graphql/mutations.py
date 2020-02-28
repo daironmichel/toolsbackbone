@@ -317,7 +317,7 @@ class StopProfit(relay.ClientIDMutation):
 
         strategy = None
         if strategy_id:
-            strategy = info.context.user.strategies.filter(
+            strategy = info.context.user.trading_strategies.filter(
                 id=strategy_id).first()
             if not strategy:
                 return StopProfit(
@@ -612,7 +612,7 @@ class AutoPilotON(relay.ClientIDMutation):
 
         user = info.context.user
 
-        strategy = user.strategies.get(
+        strategy = user.trading_strategies.get(
             id=strategy_id) if strategy_id else root.get_default_strategy(user)
         if not strategy:
             return AutoPilotON(error=AutoPilotONError.STRATEGY_REQUIRED,
