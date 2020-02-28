@@ -618,7 +618,7 @@ class AutoPilotON(relay.ClientIDMutation):
             return AutoPilotON(error=AutoPilotONError.STRATEGY_REQUIRED,
                                error_message='Either set the strategy_id param or configure a default.')
 
-        provider = user.providers.get(
+        provider = user.service_providers.get(
             id=provider_id) if provider_id else root.get_default_privider(user)
         if not provider:
             return AutoPilotON(error=AutoPilotONError.PROVIDER_REQUIRED,
