@@ -572,36 +572,41 @@ class AutoPilotON(relay.ClientIDMutation):
     error = graphene.Field(AutoPilotONError)
     error_message = graphene.String()
 
-    def _get_settings(self, user):
-        if not self._settings:
-            self._settings = Settings.objects.filter(user_id=user.id) \
+    @classmethod
+    def _get_settings(cls, context, user):
+        if not context.settings:
+            context.settings = Settings.objects.filter(user_id=user.id) \
                 .select_related('default_stategy', 'default_broker__default_provider') \
                 .first()
-        return self._settings
+        return context.settings
 
-    def get_default_modifier(self, user):
-        settings = self._get_settings(user)
+    @classmethod
+    def get_default_modifier(cls, context, user):
+        settings = cls._get_settings(context, user)
         if not settings:
             return None
         return settings.default_autopilot_modifier
 
-    def get_default_strategy(self, user):
-        settings = self._get_settings(user)
+    @classmethod
+    def get_default_strategy(cls, context, user):
+        settings = cls._get_settings(context, user)
         if not settings:
             return None
         return settings.default_strategy
 
-    def get_default_provider(self, user):
-        settings = self._get_settings(user)
+    @classmethod
+    def get_default_provider(cls, context, user):
+        settings = cls._get_settings(context, user)
         if not settings:
             return None
         return settings.default_broker.default_provider
 
-    def get_default_account(self, user):
-        settings = self._get_settings(user)
+    @classmethod
+    def get_default_account(cls, context, user):
+        settings = cls._get_settings(context, user)
         if not settings:
             return None
-        default_provider = self._default_provider(user)
+        default_provider = cls._default_provider(user)
         if not default_provider:
             return None
         return Account.objects.filter(account_key=default_provider.account_key)
