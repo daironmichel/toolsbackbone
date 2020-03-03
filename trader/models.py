@@ -34,6 +34,8 @@ class Account(models.Model):
     account_mode = models.CharField(max_length=25, choices=ACCOUNT_MODES)
     account_status = models.CharField(max_length=25, choices=ACCOUNT_STATUS)
     pdt_status = models.CharField(max_length=50)
+    total_account_value = models.DecimalField(
+        max_digits=12, decimal_places=2)
     account_balance = models.DecimalField(
         max_digits=12, decimal_places=2)
     net_cash = models.DecimalField(
