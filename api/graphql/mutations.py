@@ -228,7 +228,7 @@ class BuyStock(relay.ClientIDMutation):
         limit_price = get_limit_price(OrderAction.BUY, last_price,
                                       strategy.price_margin)
         quantity = strategy.get_quantity_for(
-            buying_power=account.net_cash, price_per_share=last_price)
+            buying_power=account.total_account_value, price_per_share=last_price)
 
         order_params = {
             'account_key': account_key,

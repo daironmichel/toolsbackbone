@@ -84,7 +84,7 @@ class TradingStrategy(models.Model):
         return (exposure_amount / price_per_share).quantize(Decimal('1'))
 
     def funded(self, account: Account) -> Decimal:
-        exposure_amount = account.net_cash * \
+        exposure_amount = account.total_account_value * \
             (self.exposure_percent / Decimal(100))
         return exposure_amount < account.cash_available_for_investment
 
