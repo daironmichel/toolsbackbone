@@ -10,6 +10,49 @@ from trader.utils import get_round_price
 # Create your models here.
 
 
+class Account(models.Model):
+    CASH = "CASH"
+    MARGIN = "MARGIN"
+    ACCOUNT_MODES = [
+        (CASH, 'CASH'),
+        (MARGIN, 'MARGIN')
+    ]
+
+    ACTIVE = 'ACTIVE'
+    CLOSED = 'CLOSED'
+    ACCOUNT_STATUS = [
+        (ACTIVE, 'ACTIVE'),
+        (CLOSED, 'CLOSED')
+    ]
+
+    name = models.CharField(max_length=250)
+    description = models.CharField(max_length=250)
+    account_id = models.CharField(max_length=250)
+    account_key = models.CharField(max_length=250)
+    account_type = models.CharField(max_length=50)
+    institution_type = models.CharField(max_length=50)
+    account_mode = models.CharField(max_length=25, choices=ACCOUNT_MODES)
+    account_status = models.CharField(max_length=25, choices=ACCOUNT_STATUS)
+    pdt_status = models.CharField(max_length=50)
+    net_cash = models.DecimalField(
+        max_digits=12, decimal_places=2)
+    cash_available_for_investment = models.DecimalField(
+        max_digits=12, decimal_places=2)
+    cash_balance = models.DecimalField(max_digits=12, decimal_places=2)
+    cash_buying_power = models.DecimalField(max_digits=12, decimal_places=2)
+    margin_buying_power = models.DecimalField(max_digits=12, decimal_places=2)
+    last_updated = models.DateTimeField(auto_now=True)
+    broker = models.ForeignKey(
+        'Broker', on_delete=models.CASCADE, related_name='accounts')
+    provider = models.ForeignKey(
+        'ServiceProvider', on_delete=models.CASCADE, related_name='accounts')
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='accounts')
+
+    def __str__(self):
+        return f'<Account: {self.id}, "{self.name}">'
+
+
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
     exposure_percent = models.DecimalField(
@@ -36,6 +79,11 @@ class TradingStrategy(models.Model):
         exposure_amount = buying_power * (self.exposure_percent / Decimal(100))
         return (exposure_amount / price_per_share).quantize(Decimal('1'))
 
+    def funded(self, account: Account) -> Decimal:
+        exposure_amount = account.net_cash * \
+            (self.exposure_percent / Decimal(100))
+        return exposure_amount < account.cash_available_for_investment
+
 
 class Broker(models.Model):
     name = models.CharField(max_length=250)
@@ -57,45 +105,6 @@ class Broker(models.Model):
              update_fields=None):
         self.slug = slugify(self.name)
         super().save(force_insert, force_update, using, update_fields)
-
-
-class Account(models.Model):
-    CASH = "CASH"
-    MARGIN = "MARGIN"
-    ACCOUNT_MODES = [
-        (CASH, 'CASH'),
-        (MARGIN, 'MARGIN')
-    ]
-
-    ACTIVE = 'ACTIVE'
-    CLOSED = 'CLOSED'
-    ACCOUNT_STATUS = [
-        (ACTIVE, 'ACTIVE'),
-        (CLOSED, 'CLOSED')
-    ]
-
-    name = models.CharField(max_length=250)
-    description = models.CharField(max_length=250)
-    account_id = models.CharField(max_length=250)
-    account_key = models.CharField(max_length=250)
-    account_type = models.CharField(max_length=50)
-    institution_type = models.CharField(max_length=50)
-    account_mode = models.CharField(max_length=25, choices=ACCOUNT_MODES)
-    account_status = models.CharField(max_length=25, choices=ACCOUNT_STATUS)
-    pdt_status = models.CharField(max_length=50)
-    cash_balance = models.DecimalField(max_digits=12, decimal_places=2)
-    cash_buying_power = models.DecimalField(max_digits=12, decimal_places=2)
-    margin_buying_power = models.DecimalField(max_digits=12, decimal_places=2)
-    last_updated = models.DateTimeField(auto_now=True)
-    broker = models.ForeignKey(
-        Broker, on_delete=models.CASCADE, related_name='accounts')
-    provider = models.ForeignKey(
-        'ServiceProvider', on_delete=models.CASCADE, related_name='accounts')
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='accounts')
-
-    def __str__(self):
-        return f'<Account: {self.id}, "{self.name}">'
 
 
 class ServiceProvider(models.Model):

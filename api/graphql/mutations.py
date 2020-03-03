@@ -155,6 +155,7 @@ class SyncAccounts(relay.ClientIDMutation):
 
 class BuyStockError(graphene.Enum):
     ACCOUNT_NOT_PROVIDED = 'ACCOUNT_NOT_PROVIDED'
+    INSUFFICIENT_FUNDS = 'INSUFFICIENT_FUNDS'
 
 
 class BuyStock(relay.ClientIDMutation):
@@ -189,6 +190,13 @@ class BuyStock(relay.ClientIDMutation):
         if not account:
             account = Account.objects.get(account_key=account_key)
 
+        if not strategy.funded(account):
+            return BuyStock(
+                error=BuyStockError.INSUFFICIENT_FUNDS,
+                error_message='Insufficient funds. Strategy selected ' +
+                'requires more cash available for investment.'
+            )
+
         etrade = get_provider_instance(provider)
 
         if autopilot:
@@ -220,7 +228,7 @@ class BuyStock(relay.ClientIDMutation):
         limit_price = get_limit_price(OrderAction.BUY, last_price,
                                       strategy.price_margin)
         quantity = strategy.get_quantity_for(
-            buying_power=account.cash_buying_power, price_per_share=last_price)
+            buying_power=account.net_cash, price_per_share=last_price)
 
         order_params = {
             'account_key': account_key,

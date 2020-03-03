@@ -230,8 +230,12 @@ class Etrade:
             account.institution_type = acc_data.get('institutionType')
             account.pdt_status = balance_data.get(
                 'dayTraderStatus') or "NOT_AVAILABLE"
+            account.net_cash = Decimal(
+                str(computed_balance.get('netCash', 0)))
+            account.cash_available_for_investment = Decimal(
+                str(computed_balance.get('cashAvailableForInvestment', 0)))
             account.cash_balance = Decimal(str(computed_balance.get(
-                'cashBalance', 0))) or Decimal(str(computed_balance.get('cashAvailableForInvestment', 0)))
+                'cashBalance', 0)))
             account.cash_buying_power = Decimal(str(computed_balance.get(
                 'cashBuyingPower', 0)))
             account.margin_buying_power = Decimal(str(computed_balance.get(
