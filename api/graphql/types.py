@@ -378,7 +378,8 @@ class TransactionType(graphene.ObjectType):
 
     def resolve_symbol(self, info, **kwargs):
         brokerage = self.get("brokerage")
-        symbol = brokerage.get("displaySymbol")
+        product = brokerage.get("product")
+        symbol = product.get("symbol")
         if not symbol:
             raise ValueError(
                 f'Expecting a value for symbol. Got: "{symbol}"')
@@ -658,9 +659,10 @@ class ViewerType(graphene.ObjectType):
         symbol_map = {}
         for tran in transactions:
             brokerage = tran.get("brokerage")
+            product = tran.get("product")
             transaction_type = tran.get("transactionType")
             transaction_date = tran.get("transactionDate")
-            symbol = brokerage.get("displaySymbol")
+            symbol = product.get("symbol")
             quantity = brokerage.get("quantity")
             amount = tran.get("amount")
             if transaction_type not in ('Bought', 'Sold'):
