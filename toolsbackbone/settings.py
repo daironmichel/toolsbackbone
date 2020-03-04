@@ -252,6 +252,7 @@ GRAPHENE = {
 # ---------------------------
 
 AUTOPILOT_CAPACITY = int(os.getenv('DJANGO_AUTOPILOT_CAPACITY', '5'))
+AUTOPILOT_MAX_CONN_AGE = int(os.getenv('DJANGO_AUTOPILOT_MAX_CONN_AGE', '0'))
 
 # ---------------------------
 # Heroku settings
@@ -261,4 +262,9 @@ AUTOPILOT_CAPACITY = int(os.getenv('DJANGO_AUTOPILOT_CAPACITY', '5'))
 django_heroku.settings(locals(), logging=not bool(
     strtobool(os.getenv('DJANGO_LOGGING', 'false'))))
 
+# override for pgbouncer
 del DATABASES['default']['OPTIONS']['sslmode']
+
+# override for flushing autopilot connections
+if AUTOPILOT_MAX_CONN_AGE:
+    DATABASES['default']['CONN_MAX_AGE'] = AUTOPILOT_MAX_CONN_AGE
