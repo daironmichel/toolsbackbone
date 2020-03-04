@@ -263,7 +263,7 @@ django_heroku.settings(locals(), logging=not bool(
     strtobool(os.getenv('DJANGO_LOGGING', 'false'))))
 
 # override for pgbouncer
-del DATABASES['default']['OPTIONS']['sslmode']
+# del DATABASES['default']['OPTIONS']['sslmode']
 
 # override for flushing autopilot connections
 if AUTOPILOT_MAX_CONN_AGE:
