@@ -570,7 +570,7 @@ class Etrade:
         for position in positions:
             if position['symbolDescription'] == symbol:
                 quantity = position["quantity"]
-                entry_price = Decimal(position["price"])
+                entry_price = Decimal(position["pricePaid"])
 
         return quantity, entry_price
 

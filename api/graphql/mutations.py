@@ -564,12 +564,11 @@ class AutoPilotONError(graphene.Enum):
     ACCOUNT_REQUIRED = 'ACCOUNT_REQUIRED'
     STRATEGY_REQUIRED = 'STRATEGY_REQUIRED'
     ALREADY_EXISTS = 'ALREADY_EXISTS'
+    NO_POSITION_FOR_SYMBOL = 'NO_POSITION_FOR_SYMBOL'
 
 
 class AutoPilotON(relay.ClientIDMutation):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._settings = None
+    _settings = None
 
     class Input:
         symbol = graphene.String(required=True)
@@ -582,11 +581,12 @@ class AutoPilotON(relay.ClientIDMutation):
 
     @classmethod
     def _get_settings(cls, info):
-        if not hasattr(info, 'settings'):
-            info.settings = Settings.objects.filter(user_id=info.context.user.id) \
+        if not cls._settings:
+            settings = Settings.objects.filter(user_id=info.context.user.id) \
                 .select_related('default_strategy', 'default_broker__default_provider') \
                 .first()
-        return info.settings
+            cls._settings = settings
+        return cls._settings
 
     @classmethod
     def get_default_modifier(cls, info):
@@ -617,7 +617,7 @@ class AutoPilotON(relay.ClientIDMutation):
         default_provider = cls.get_default_provider(info)
         if not default_provider:
             return None
-        return Account.objects.filter(account_key=default_provider.account_key)
+        return Account.objects.get(account_key=default_provider.account_key)
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id=None,
@@ -646,10 +646,11 @@ class AutoPilotON(relay.ClientIDMutation):
             return AutoPilotON(error=AutoPilotONError.ALREADY_EXISTS,
                                error_message=f'Autopilot for {symbol} already exists.')
 
-        default_modifier = root.get_default_modifier(user)
+        default_modifier = cls.get_default_modifier(user)
 
         etrade = get_provider_instance(provider)
-        quantity, entry_price = etrade.get_position(account.symbol, symbol)
+        quantity, entry_price = etrade.get_position(
+            account.account_key, symbol)
         if not quantity or not entry_price:
             return AutoPilotON(error=AutoPilotONError.NO_POSITION_FOR_SYMBOL,
                                error_message=f'No position found for {symbol}. Position: {quantity}@{entry_price}')
