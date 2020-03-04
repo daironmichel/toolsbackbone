@@ -1,3 +1,3 @@
 release: python manage.py migrate
-web: gunicorn toolsbackbone.wsgi --log-file -
+web: bin/start-pgbouncer-stunnel gunicorn toolsbackbone.wsgi --log-file -
 autopilot: python manage.py autopilot
