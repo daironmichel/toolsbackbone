@@ -659,7 +659,7 @@ class ViewerType(graphene.ObjectType):
         symbol_map = {}
         for tran in transactions:
             brokerage = tran.get("brokerage")
-            product = tran.get("product")
+            product = brokerage.get("product")
             transaction_type = tran.get("transactionType")
             transaction_date = tran.get("transactionDate")
             symbol = product.get("symbol")
