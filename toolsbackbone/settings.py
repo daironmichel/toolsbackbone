@@ -260,3 +260,5 @@ AUTOPILOT_CAPACITY = int(os.getenv('DJANGO_AUTOPILOT_CAPACITY', '5'))
 # This should always be the last line
 django_heroku.settings(locals(), logging=not bool(
     strtobool(os.getenv('DJANGO_LOGGING', 'false'))))
+
+del DATABASES['default']['OPTIONS']['sslmode']
