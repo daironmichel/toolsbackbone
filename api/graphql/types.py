@@ -423,7 +423,8 @@ class TransactionType(graphene.ObjectType):
         return fee
 
     def resolve_transaction_date(self, info, **kwargs):
-        transaction_date = self.get("transactionDate")
+        transaction_date = datetime.datetime.fromtimestamp(
+            self.get("transactionDate")/1000)
         if not transaction_date:
             raise ValueError(
                 f'Expecting a value for transaction_date. Got: "{transaction_date}"')
@@ -668,7 +669,7 @@ class ViewerType(graphene.ObjectType):
                 performance = {
                     'symbol': symbol,
                     'amount': Decimal(amount),
-                    'date': datetime.datetime.fromtimestamp(transaction_date//1000),
+                    'date': datetime.datetime.fromtimestamp(transaction_date/1000),
                     'bought': int(quantity) if transaction_type == 'Bought' else 0,
                     'sold': int(quantity) * -1 if transaction_type == 'Sold' else 0
                 }
@@ -676,7 +677,7 @@ class ViewerType(graphene.ObjectType):
             else:
                 performace = symbol_map[symbol]
                 performace['date'] = datetime.datetime.fromtimestamp(
-                    transaction_date//1000)
+                    transaction_date/1000)
                 performace['amount'] = performace['amount'] + \
                     Decimal(amount)
                 if transaction_type == 'Bought':
