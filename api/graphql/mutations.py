@@ -670,7 +670,7 @@ class AutoPilotON(relay.ClientIDMutation):
             base_price=entry_price,
             loss_ref_price=entry_price,
             profit_ref_price=entry_price,
-            ref_time=datetime.now,
+            ref_time=datetime.now(),
             modifier=default_modifier)
 
         task.save()
