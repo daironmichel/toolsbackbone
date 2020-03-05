@@ -298,7 +298,7 @@ class AutoPilotTask(models.Model):
 
     @property
     def loss_price(self) -> Decimal:
-        return get_round_price(self.stop_ref_price - self.loss_amount)
+        return get_round_price(self.loss_ref_price - self.loss_amount)
 
     @property
     def profit_price(self) -> Decimal:
