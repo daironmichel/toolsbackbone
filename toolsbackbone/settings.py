@@ -10,11 +10,10 @@ https://docs.djangoproject.com/en/2.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.2/ref/settings/
 """
-import django_heroku
-
 import os
 from distutils.util import strtobool
 
+import django_heroku
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -251,6 +250,8 @@ GRAPHENE = {
 # Misc. Settings
 # ---------------------------
 
+PRODERS_LOG_RESPONSE_CONTENT = bool(
+    strtobool(os.getenv('DJANGO_PRODERS_LOG_RESPONSE_CONTENT', 'false')))
 AUTOPILOT_CAPACITY = int(os.getenv('DJANGO_AUTOPILOT_CAPACITY', '5'))
 AUTOPILOT_MAX_CONN_AGE = int(os.getenv('DJANGO_AUTOPILOT_MAX_CONN_AGE', '0'))
 

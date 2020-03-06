@@ -8,6 +8,7 @@ from graphene import relay
 
 from api.graphql.types import (BrokerNode, ServiceProvider,
                                ServiceProviderNode, SettingsNode)
+from trader.const import NEY_YORK_TZ
 from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import (Account, AutoPilotTask, ProviderSession, Settings,
                            TradingStrategy)
@@ -218,7 +219,7 @@ class BuyStock(relay.ClientIDMutation):
                 base_price=price,
                 loss_ref_price=price,
                 profit_ref_price=price,
-                ref_time=datetime.now,
+                ref_time=datetime.now(tz=NEY_YORK_TZ),
                 modifier=default_modifier)
             task.save()
             return BuyStock()
@@ -670,7 +671,7 @@ class AutoPilotON(relay.ClientIDMutation):
             base_price=entry_price,
             loss_ref_price=entry_price,
             profit_ref_price=entry_price,
-            ref_time=datetime.now(),
+            ref_time=datetime.now(tz=NEY_YORK_TZ),
             modifier=default_modifier)
 
         task.save()

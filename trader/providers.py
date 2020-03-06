@@ -5,6 +5,7 @@ import os
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.utils import timezone
 from rauth import OAuth1Service
 
@@ -76,8 +77,9 @@ class Etrade:
         if os.getenv('DJANGO_LOG_LEVEL', 'INFO') == 'DEBUG':
             logger.debug('%s response: %s', self.log_prefix,
                          response.status_code)
-            logger.debug('%s content: %s', self.log_prefix,
-                         response.json() if response.content else 'EMPTY')
+            if settings.PRODERS_LOG_RESPONSE_CONTENT:
+                logger.debug('%s content: %s', self.log_prefix,
+                             response.json() if response.content else 'EMPTY')
 
     def request(self, method: str, endpoint: str, realm='', **kwargs):
         url = self._get_request_url(method, endpoint, **kwargs)

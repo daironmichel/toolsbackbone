@@ -66,7 +66,7 @@ async def get_provider(pilot: AutoPilotTask):
 async def place_sell_order(passenger: AutoPilotTask, sell_price: Decimal,
                            etrade: AsyncEtrade):
     limit_price = get_limit_price(
-        OrderAction.SELL, sell_price, margin=Decimal('0.01'))
+        OrderAction.SELL, sell_price, margin=passenger.strategy.margin)
     order_params = {
         'account_key': passenger.account.account_key,
         'market_session': MarketSession.current().value,
@@ -106,22 +106,21 @@ async def commit_sell(passenger: AutoPilotTask, sell_price: Decimal,
 
 
 async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
-    quote = await etrade.get_quote(passenger.symbol)
     # last = Decimal(quote.get('All').get('lastTrade'))
-    bid = Decimal(quote.get('All').get('bid'))
-    ask = Decimal(quote.get('All').get('ask'))
 
     if not passenger.tracking_order_id:
+        quote = await etrade.get_quote(passenger.symbol)
+        ask = Decimal(quote.get('All').get('ask'))
         await commit_sell(passenger, ask, etrade)
         return
 
     order = await etrade.get_order_details(passenger.account.account_key,
                                            passenger.tracking_order_id,
                                            passenger.symbol)
-
     if not order:
         logger.info("%s %s unable to track sell order %s. NOT FOUND.",
                     PREFIX, pilot_name, passenger.tracking_order_id)
+
         update_fields = {
             'status': AutoPilotTask.PAUSED,
             'state': AutoPilotTask.ERROR,
@@ -134,6 +133,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
     limit_price = details.get("limitPrice")
 
     if status in (OrderStatus.OPEN, OrderStatus.PARTIAL):
+        quote = await etrade.get_quote(passenger.symbol)
+        ask = Decimal(quote.get('All').get('ask'))
+        bid = Decimal(quote.get('All').get('bid'))
         placed_at = datetime.fromtimestamp(
             details.get("placedTime")/1000, tz=pytz.utc)
         elapsed_time = placed_at - datetime.now(tz=pytz.utc)
@@ -152,7 +154,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
                      PREFIX, pilot_name, passenger.tracking_order_id)
 
     elif status == OrderStatus.CANCELLED:
-        logger.debug("%s %s order %s cancelled. placing new order...",
+        logger.debug("%s %s order %s cancelled. placing new sell order...",
                      PREFIX, pilot_name, passenger.tracking_order_id)
         instrument = details.get("Instrument")[0]
         ordered_quantity = instrument.get("orderedQuantity")
@@ -160,6 +162,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         pending_quantity = int(ordered_quantity) - int(filled_quantity)
         update_fields = {'quantity': pending_quantity}
         await update_passenger(passenger, update_fields)
+
+        quote = await etrade.get_quote(passenger.symbol)
+        ask = Decimal(quote.get('All').get('ask'))
         await commit_sell(passenger, ask, etrade)
 
     elif status == OrderStatus.REJECTED:
@@ -177,6 +182,16 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         if quantity in (None, 0):
             update_fields = {'status': AutoPilotTask.DONE}
             await update_passenger(passenger, update_fields)
+            instrument = details.get("Instrument")[0]
+            avg_execution_price = Decimal(
+                instrument.get("averageExecutionPrice"))
+            percent = (avg_execution_price -
+                       passenger.entry_price) / passenger.entry_price * Decimal(100)
+            percent = percent.quantize(Decimal('1'))
+            percent_label = "profit" if percent > Decimal(0) else "loss"
+            logger.info("%s %s position sold for a %s%% %s",
+                        PREFIX, pilot_name, percent, percent_label)
+            # TODO: notify on discord
         else:
             # TODO: place sell order for scale out quantity
             update_fields = {'quantity': quantity}
@@ -356,7 +371,11 @@ async def main():
             continue
 
         logger.debug("%s looking for passengers...", PREFIX)
+        db_start = time.perf_counter()
         passengers = await get_passengers()
+        db_end = time.perf_counter()
+        logger.debug("%s %s sec", PREFIX, db_start - db_end)
+
         if not passengers:
             # logger.debug("%s no passengers. sleeping for 1 sec.", PREFIX)
             await asyncio.sleep(1)
