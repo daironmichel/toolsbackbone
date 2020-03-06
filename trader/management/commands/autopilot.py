@@ -27,7 +27,7 @@ def get_passengers():
     return list(
         AutoPilotTask.objects.all()
         .select_related('provider', 'provider__broker', 'strategy', 'account', 'user')
-        .filter(status=AutoPilotTask.READY)
+        .filter(status__in=(AutoPilotTask.READY, AutoPilotTask.RUNNING))
     )
 
 
