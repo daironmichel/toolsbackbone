@@ -395,7 +395,7 @@ async def main():
 
         logger.debug("%s %s passengers in line.", PREFIX, len(passengers))
         for passngr in passengers:
-            driver_name = f'driver-{passngr.user_id}-{passngr.symbol}'
+            driver_name = f'driver.{passngr.id}/{passngr.symbol}'
             logger.debug("%s creating %s...", PREFIX, driver_name)
             await queue.put(passngr)
             await update_passenger(passngr, {'status': AutoPilotTask.QUEUED})
