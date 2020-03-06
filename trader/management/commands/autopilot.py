@@ -65,22 +65,26 @@ async def get_provider(pilot: AutoPilotTask):
 
 async def place_sell_order(passenger: AutoPilotTask, sell_price: Decimal,
                            etrade: AsyncEtrade):
-    limit_price = get_limit_price(
-        OrderAction.SELL, sell_price, margin=passenger.strategy.margin)
-    order_params = {
-        'account_key': passenger.account.account_key,
-        'market_session': MarketSession.current().value,
-        'action': OrderAction.SELL.value,
-        'symbol': passenger.symbol,
-        'price_type': PriceType.LIMIT.value,
-        'quantity': passenger.quantity,
-        'limit_price': limit_price
-    }
+    try:
+        limit_price = get_limit_price(
+            OrderAction.SELL, sell_price, margin=passenger.strategy.margin)
+        order_params = {
+            'account_key': passenger.account.account_key,
+            'market_session': MarketSession.current().value,
+            'action': OrderAction.SELL.value,
+            'symbol': passenger.symbol,
+            'price_type': PriceType.LIMIT.value,
+            'quantity': passenger.quantity,
+            'limit_price': limit_price
+        }
 
-    preview_ids = await etrade.preview_order(
-        order_client_id=get_random_string(length=20), **order_params)
-    order_id = await etrade.place_order(order_client_id=get_random_string(
-        length=20), preview_ids=preview_ids, **order_params)
+        preview_ids = await etrade.preview_order(
+            order_client_id=get_random_string(length=20), **order_params)
+        order_id = await etrade.place_order(order_client_id=get_random_string(
+            length=20), preview_ids=preview_ids, **order_params)
+    except ServiceError:
+        logger.error("place_sell_order: params %s", order_params)
+        raise
 
     # passenger.tracking_order_placed_at = datetime.now()
     return order_id
