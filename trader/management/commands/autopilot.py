@@ -375,10 +375,7 @@ async def main():
             continue
 
         logger.debug("%s looking for passengers...", PREFIX)
-        db_start = time.perf_counter()
         passengers = await get_passengers()
-        db_end = time.perf_counter()
-        logger.debug("%s %s sec", PREFIX, db_start - db_end)
 
         if not passengers:
             # logger.debug("%s no passengers. sleeping for 1 sec.", PREFIX)
