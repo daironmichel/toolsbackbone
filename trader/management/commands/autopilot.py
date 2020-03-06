@@ -27,8 +27,15 @@ def get_passengers():
     return list(
         AutoPilotTask.objects.all()
         .select_related('provider', 'provider__broker', 'strategy', 'account', 'user')
-        .filter(status__in=(AutoPilotTask.READY, AutoPilotTask.RUNNING))
+        .filter(status=AutoPilotTask.READY)
     )
+
+
+@database_sync_to_async
+def recall_stranded_passengers():
+    passengers = AutoPilotTask.objects.all() \
+        .filter(status=AutoPilotTask.RUNNING)
+    passengers.update(status=AutoPilotTask.READY)
 
 
 @database_sync_to_async
@@ -67,7 +74,7 @@ async def place_sell_order(passenger: AutoPilotTask, sell_price: Decimal,
                            etrade: AsyncEtrade):
     try:
         limit_price = get_limit_price(
-            OrderAction.SELL, sell_price, margin=passenger.strategy.margin)
+            OrderAction.SELL, sell_price, margin=passenger.strategy.price_margin)
         order_params = {
             'account_key': passenger.account.account_key,
             'market_session': MarketSession.current().value,
@@ -366,6 +373,10 @@ async def main():
     logger.info("%s Enabled.", PREFIX)
     # Create a queue that we will use to store our "workload".
     queue = asyncio.Queue(maxsize=settings.AUTOPILOT_CAPACITY)
+
+    # reset any tasks left hanging (e.g: by a system restart)
+    logger.debug("%s recovering hanging tasks...", PREFIX)
+    await recall_stranded_passengers()
 
     while True:
         if queue.full():
