@@ -155,3 +155,8 @@ class AsyncEtrade(Etrade):
         positions = await self.get_positions(account_key)
 
         return self._process_get_position(symbol, positions)
+
+    async def get_position_quantity(self, account_key, symbol):
+        positions = await self.get_positions(account_key)
+
+        return self._process_get_position_quantity(symbol, positions)
