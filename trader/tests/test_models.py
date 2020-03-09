@@ -59,42 +59,42 @@ class TestAutoPilotTask:
         auto_pilot = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('10'),
-            ref_price=Decimal('10'))
+            profit_ref_price=Decimal('10'))
 
         profit_price = auto_pilot.profit_price
 
         assert profit_price == Decimal('10.8')
 
-    def test_stop_price__returns_correct_value(self):
+    def test_loss_price__returns_correct_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
         auto_pilot = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('10'),
-            ref_price=Decimal('10'))
+            loss_ref_price=Decimal('10'))
 
-        stop_price = auto_pilot.stop_price
+        loss_price = auto_pilot.loss_price
 
-        assert stop_price == Decimal('9.7')
+        assert loss_price == Decimal('9.7')
 
-    def test_stop_price__returns_rounded_value(self):
+    def test_loss_price__returns_rounded_value(self):
         strat = TradingStrategy(loss_percent=Decimal('3'))
         auto_pilot1 = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('4.5324'),
-            ref_price=Decimal('10'))
+            loss_ref_price=Decimal('10'))
         auto_pilot2 = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('0.45324'),
-            ref_price=Decimal('1'))
+            loss_ref_price=Decimal('1'))
         auto_pilot3 = AutoPilotTask(
             strategy=strat,
             base_price=Decimal('0.045324'),
-            ref_price=Decimal('0.1'))
+            loss_ref_price=Decimal('0.1'))
 
-        stop_price1 = auto_pilot1.stop_price
-        stop_price2 = auto_pilot2.stop_price
-        stop_price3 = auto_pilot3.stop_price
+        loss_price1 = auto_pilot1.loss_price
+        loss_price2 = auto_pilot2.loss_price
+        loss_price3 = auto_pilot3.loss_price
 
-        assert stop_price1 == Decimal('9.86')
-        assert stop_price2 == Decimal('0.986')
-        assert stop_price3 == Decimal('0.0986')
+        assert loss_price1 == Decimal('9.86')
+        assert loss_price2 == Decimal('0.986')
+        assert loss_price3 == Decimal('0.0986')

@@ -200,23 +200,31 @@ class BrokerConnection(NonNullConnection):
 
 
 class AutoPilotTaskStatus(graphene.Enum):
-    READY = 0  # default
-    QUEUED = 1
-    RUNNING = 2
-    DONE = 3
-    PAUSED = 4
+    READY = AutoPilotTask.READY  # default
+    QUEUED = AutoPilotTask.QUEUED
+    RUNNING = AutoPilotTask.RUNNING
+    DONE = AutoPilotTask.DONE
+    PAUSED = AutoPilotTask.PAUSED
 
 
 class AutoPilotTaskState(graphene.Enum):
-    BUYING = 0
-    WATCHING = 1  # default
-    SELLING = 2
-    ERROR = 3
+    BUYING = AutoPilotTask.BUYING
+    WATCHING = AutoPilotTask.WATCHING  # default
+    SELLING = AutoPilotTask.SELLING
+    ERROR = AutoPilotTask.ERROR
+
+
+class AutoPilotTaskModifier(graphene.Enum):
+    FOLLOW_STRATEGY = AutoPilotTask.FOLLOW_STRATEGY  # default
+    MAXIMIZE_PROFIT = AutoPilotTask.MAXIMIZE_PROFIT
+    MINIMIZE_LOSS = AutoPilotTask.MINIMIZE_LOSS
+    MIN_LOSS_MAX_PROFIT = AutoPilotTask.MIN_LOSS_MAX_PROFIT
 
 
 class AutoPilotTaskNode(DjangoObjectType):
     status = graphene.Field(AutoPilotTaskStatus, required=True)
     state = graphene.Field(AutoPilotTaskState, required=True)
+    modifier = graphene.Field(AutoPilotTaskModifier, required=True)
 
     class Meta:
         # removing user from excluded fields due to following warning:

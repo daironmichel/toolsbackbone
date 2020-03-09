@@ -6,8 +6,9 @@ import graphene
 from django.utils.crypto import get_random_string
 from graphene import relay
 
-from api.graphql.types import (BrokerNode, ServiceProvider,
-                               ServiceProviderNode, SettingsNode)
+from api.graphql.types import (AutoPilotTaskModifier, BrokerNode,
+                               ServiceProvider, ServiceProviderNode,
+                               SettingsNode)
 from trader.const import NEY_YORK_TZ
 from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import (Account, AutoPilotTask, ProviderSession, Settings,
@@ -576,6 +577,7 @@ class AutoPilotON(relay.ClientIDMutation):
         strategy_id = graphene.ID()
         provider_id = graphene.ID()
         account_id = graphene.ID()
+        modifier = graphene.Field(AutoPilotTaskModifier)
 
     error = graphene.Field(AutoPilotONError)
     error_message = graphene.String()
@@ -622,7 +624,8 @@ class AutoPilotON(relay.ClientIDMutation):
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id=None,
-                               provider_id=None, account_id=None):
+                               provider_id=None, account_id=None,
+                               modifier=None):
         user = info.context.user
 
         strategy = user.trading_strategies.get(
@@ -647,7 +650,8 @@ class AutoPilotON(relay.ClientIDMutation):
             return AutoPilotON(error=AutoPilotONError.ALREADY_EXISTS,
                                error_message=f'Autopilot for {symbol} already exists.')
 
-        default_modifier = cls.get_default_modifier(user)
+        if modifier is None:
+            modifier = cls.get_default_modifier(user)
 
         etrade = get_provider_instance(provider)
         quantity, entry_price = etrade.get_position(
@@ -672,7 +676,7 @@ class AutoPilotON(relay.ClientIDMutation):
             loss_ref_price=entry_price,
             profit_ref_price=entry_price,
             ref_time=datetime.now(tz=NEY_YORK_TZ),
-            modifier=default_modifier)
+            modifier=modifier)
 
         task.save()
         return AutoPilotON()

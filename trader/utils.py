@@ -18,6 +18,7 @@ def get_limit_price(action: OrderAction, price: Decimal, margin: Decimal) -> Dec
         limit_price = limit_price.quantize(quantum)
     else:
         limit_price = price + margin if action.buying() else price - margin
+        limit_price = limit_price.quantize(Decimal('0.01'))
 
     return limit_price
 

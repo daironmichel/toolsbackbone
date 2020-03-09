@@ -56,6 +56,28 @@ def test__get_limit_price__sell_under_one_dollar__substracts_correct_margin():
     assert result4 == Decimal('0.96')
 
 
+def test__get_limit_price__sell_over_one_dollar__substracts_correct_margin():
+    margin1 = Decimal('0.01')
+    margin2 = Decimal('0.02')
+    margin3 = Decimal('0.03')
+    margin4 = Decimal('0.04')
+
+    price1 = Decimal('1.32')
+    price2 = Decimal('2.032')
+    price3 = Decimal('3.0032')
+    price4 = Decimal('4.98')
+
+    result1 = get_limit_price(OrderAction.SELL, price1, margin1)
+    result2 = get_limit_price(OrderAction.SELL, price2, margin2)
+    result3 = get_limit_price(OrderAction.SELL_SHORT, price3, margin3)
+    result4 = get_limit_price(OrderAction.SELL_SHORT, price4, margin4)
+
+    assert result1 == Decimal('1.31')
+    assert result2 == Decimal('2.01')
+    assert result3 == Decimal('2.97')
+    assert result4 == Decimal('4.94')
+
+
 def test_get_round_price__rounds_correctly():
     price1 = Decimal('4.8373')
     price2 = Decimal('0.48373')
