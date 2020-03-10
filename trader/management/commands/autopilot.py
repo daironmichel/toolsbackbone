@@ -248,7 +248,8 @@ async def minimize_loss(pilot_name: str, passenger: AutoPilotTask,
     bid = Decimal(quote.get('All').get('bid'))
     ref_price_thresdhold = passenger.loss_ref_price + passenger.loss_amount * 2
     if bid > ref_price_thresdhold:
-        update_fields = {'loss_ref_price': ref_price_thresdhold}
+        update_fields = {
+            'loss_ref_price': passenger.loss_ref_price + passenger.loss_amount}
         await update_passenger(passenger, update_fields)
 
 
