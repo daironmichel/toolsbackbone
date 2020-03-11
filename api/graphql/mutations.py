@@ -663,7 +663,7 @@ class AutoPilotON(relay.ClientIDMutation):
         if modifier is None:
             modifier = cls.get_default_modifier(user)
 
-        discord_webhook = cls.get_discord_webhook()
+        discord_webhook = cls.get_discord_webhook(info)
 
         etrade = get_provider_instance(provider)
         quantity, entry_price = etrade.get_position(
