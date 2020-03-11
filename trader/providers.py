@@ -9,7 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 from rauth import OAuth1Service
 
-from trader.const import NEY_YORK_TZ
+from trader.const import NEW_YORK_TZ
 
 from .models import Account, ProviderSession, ServiceProvider
 
@@ -465,13 +465,14 @@ class Etrade:
         return self._process_order_details(order_id, response)
 
     def get_orders(self, account_key, from_date=None, to_date=None):
-        now = datetime.datetime.now(NEY_YORK_TZ)
+        now = timezone.now()
         params = {}
         if not from_date:
             from_date = now - timedelta(days=1)
-            params['fromDate'] = from_date.strftime("%m%d%Y")
+            params['fromDate'] = from_date.astimezone(
+                NEW_YORK_TZ).strftime("%m%d%Y")
         if not to_date:
-            params['toDate'] = now.strftime("%m%d%Y")
+            params['toDate'] = now.astimezone(NEW_YORK_TZ).strftime("%m%d%Y")
 
         response = self.get(
             f'/accounts/{account_key}/orders.json', params=params)
@@ -582,7 +583,7 @@ class Etrade:
         return self._process_get_position(symbol, positions)
 
     def get_transactions(self, account_key, from_date=None, to_date=None):
-        now = datetime.datetime.now(NEY_YORK_TZ)
+        now = datetime.datetime.now(NEW_YORK_TZ)
         params = {}
         if not from_date:
             from_date = now - timedelta(days=7)

@@ -65,6 +65,11 @@ def refresh_passenger_signal(passenger: AutoPilotTask):
     return passenger.signal
 
 
+async def post_webhook(webhook: str, msg: str):
+    # TODO: post to webhook
+    pass
+
+
 async def get_provider(pilot: AutoPilotTask):
     stored_session = await get_stored_session(pilot.provider)
     return AsyncEtrade(pilot.provider, stored_session)
@@ -202,7 +207,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
             percent_label = "profit" if percent > Decimal(0) else "loss"
             logger.info("%s %s position sold for a %s%% %s",
                         PREFIX, pilot_name, percent, percent_label)
-            # TODO: notify on discord
+            if passenger.discord_webhook:
+                await post_webhook(passenger.discord_webhook,
+                                   f"{passenger.symbol} position sold for a {percent}% {percent_label}")
         else:
             # TODO: place sell order for scale out quantity
             update_fields = {'quantity': quantity}

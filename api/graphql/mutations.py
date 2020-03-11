@@ -3,13 +3,14 @@ from datetime import datetime
 from decimal import Decimal
 
 import graphene
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from graphene import relay
 
 from api.graphql.types import (AutoPilotTaskModifier, BrokerNode,
                                ServiceProvider, ServiceProviderNode,
                                SettingsNode)
-from trader.const import NEY_YORK_TZ
+from trader.const import NEW_YORK_TZ
 from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import (Account, AutoPilotTask, ProviderSession, Settings,
                            TradingStrategy)
@@ -207,6 +208,7 @@ class BuyStock(relay.ClientIDMutation):
             user = info.context.user
             settings = Settings.objects.filter(user_id=user.id).first()
             default_modifier = settings.default_autopilot_modifier if settings else None
+            discord_webhook = settings.discord_webhook if settings else None
             task = AutoPilotTask(
                 signal=AutoPilotTask.BUY,
                 user=info.context.user,
@@ -220,8 +222,9 @@ class BuyStock(relay.ClientIDMutation):
                 base_price=price,
                 loss_ref_price=price,
                 profit_ref_price=price,
-                ref_time=datetime.now(tz=NEY_YORK_TZ),
-                modifier=default_modifier)
+                ref_time=timezone.now(),
+                modifier=default_modifier,
+                discord_webhook=discord_webhook)
             task.save()
             return BuyStock()
 
@@ -599,6 +602,13 @@ class AutoPilotON(relay.ClientIDMutation):
         return settings.default_autopilot_modifier
 
     @classmethod
+    def get_discord_webhook(cls, info):
+        settings = cls._get_settings(info)
+        if not settings:
+            return None
+        return settings.discord_webhook
+
+    @classmethod
     def get_default_strategy(cls, info):
         settings = cls._get_settings(info)
         if not settings:
@@ -653,6 +663,8 @@ class AutoPilotON(relay.ClientIDMutation):
         if modifier is None:
             modifier = cls.get_default_modifier(user)
 
+        discord_webhook = cls.get_discord_webhook()
+
         etrade = get_provider_instance(provider)
         quantity, entry_price = etrade.get_position(
             account.account_key, symbol)
@@ -675,8 +687,9 @@ class AutoPilotON(relay.ClientIDMutation):
             base_price=entry_price,
             loss_ref_price=entry_price,
             profit_ref_price=entry_price,
-            ref_time=datetime.now(tz=NEY_YORK_TZ),
-            modifier=modifier)
+            ref_time=timezone.now(),
+            modifier=modifier,
+            discord_webhook=discord_webhook)
 
         task.save()
         return AutoPilotON()

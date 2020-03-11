@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from trader.const import NEY_YORK_TZ
+from django.utils import timezone
+
+from trader.const import NEW_YORK_TZ
 
 from .enums import OrderAction
 
@@ -35,15 +37,15 @@ def get_round_price(price: Decimal) -> Decimal:
 
 
 def time_till_market_open(otc=False):
-    now = datetime.now(NEY_YORK_TZ)
+    now = timezone.now().astimezone(NEW_YORK_TZ)
     open_hour = 9 if otc else 4
     open_minute = 30 if otc else 0
     close_hour = 16 if otc else 20
     close_minute = 0
-    open_time = datetime(now.year, now.month, now.day,
-                         open_hour, open_minute, tzinfo=NEY_YORK_TZ)
-    close_time = datetime(now.year, now.month, now.day,
-                          close_hour, close_minute, tzinfo=NEY_YORK_TZ)
+    open_time = now.replace(
+        hour=open_hour, minute=open_minute, second=0, microsecond=0)
+    close_time = now.replace(
+        hour=close_hour, minute=close_minute, second=0, microsecond=0)
 
     # market is open
     if open_time.weekday() < 5 and open_time <= now < close_time:

@@ -1,7 +1,10 @@
 import enum
 from datetime import datetime
 
-from trader.const import NEY_YORK_TZ
+import pytz
+from django.utils import timezone
+
+from trader.const import NEW_YORK_TZ
 
 
 class OrderStatus(enum.Enum):
@@ -41,19 +44,32 @@ class MarketSession(enum.Enum):
 
     @staticmethod
     def current(otc=False):
-        now = datetime.now(NEY_YORK_TZ)
+        now = timezone.now().astimezone(NEW_YORK_TZ)
 
         if now.weekday() >= 5:
             return None  # no session on weekends
 
-        premarket_start = datetime(
-            now.year, now.month, now.day, 4, tzinfo=NEY_YORK_TZ)
-        market_open = datetime(
-            now.year, now.month, now.day, 9, 30, tzinfo=NEY_YORK_TZ)
-        market_close = datetime(
-            now.year, now.month, now.day, 16, tzinfo=NEY_YORK_TZ)
-        afterhours_end = datetime(
-            now.year, now.month, now.day, 20, tzinfo=NEY_YORK_TZ)
+        premarket_start = now.replace(
+            hour=4, minute=0, second=0, microsecond=0)
+        market_open = now.replace(
+            hour=9, minute=30, second=0, microsecond=0)
+        market_close = now.replace(
+            hour=16, minute=0, second=0, microsecond=0)
+        afterhours_end = now.replace(
+            hour=20, minute=0, second=0, microsecond=0)
+        # now = NEW_YORK_TZ.localize(datetime.now())
+
+        # if now.weekday() >= 5:
+        #     return None  # no session on weekends
+
+        # premarket_start = NEW_YORK_TZ.localize(datetime(
+        #     now.year, now.month, now.day, 4))
+        # market_open = NEW_YORK_TZ.localize(datetime(
+        #     now.year, now.month, now.day, 9, 30))
+        # market_close = NEW_YORK_TZ.localize(datetime(
+        #     now.year, now.month, now.day, 16))
+        # afterhours_end = NEW_YORK_TZ.localize(datetime(
+        #     now.year, now.month, now.day, 20))
 
         if now < premarket_start or now >= afterhours_end:
             return None

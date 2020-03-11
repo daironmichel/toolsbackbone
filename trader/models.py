@@ -253,6 +253,7 @@ class AutoPilotTask(models.Model):
         Account, on_delete=models.PROTECT, related_name='+')
     user = models.ForeignKey(
         User, on_delete=models.PROTECT, related_name='+')
+    discord_webhook = models.CharField(max_length=250, null=True, blank=True)
 
     symbol = models.CharField(max_length=10)
     quantity = models.IntegerField(default=0, blank=True)
@@ -315,6 +316,7 @@ class Settings(models.Model):
         TradingStrategy, on_delete=models.PROTECT, null=True, default=None, related_name='+')
     default_autopilot_modifier = models.SmallIntegerField(
         choices=AutoPilotTask.MODS, default=AutoPilotTask.FOLLOW_STRATEGY)
+    discord_webhook = models.CharField(max_length=250, null=True, blank=True)
 
     def __str__(self):
         return f'<Settings: {self.id}, user_id: {self.user_id}>'

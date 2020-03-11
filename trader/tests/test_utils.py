@@ -95,7 +95,7 @@ def test_get_round_price__rounds_correctly():
     assert result4 == Decimal('4.83')
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__thursday_closed_start__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START - timedelta(days=1)
     mock_datetime.side_effect = create_datetime
@@ -105,7 +105,7 @@ def test_time_till_market_open__thursday_closed_start__seconds(mock_datetime):
     assert time_till_open == 28800
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__thursday_11pm__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_PREMARKET_START - \
         timedelta(hours=5)
@@ -116,7 +116,7 @@ def test_time_till_market_open__thursday_11pm__seconds(mock_datetime):
     assert time_till_open == 18000
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_1am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_PREMARKET_START - \
         timedelta(hours=3)
@@ -127,7 +127,7 @@ def test_time_till_market_open__friday_1am__seconds(mock_datetime):
     assert time_till_open == 10800
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_closed_end__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_END
     mock_datetime.side_effect = create_datetime
@@ -137,7 +137,7 @@ def test_time_till_market_open__friday_closed_end__seconds(mock_datetime):
     assert time_till_open == 0.000001
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_premarket_start__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_PREMARKET_START
     mock_datetime.side_effect = create_datetime
@@ -147,7 +147,7 @@ def test_time_till_market_open__friday_premarket_start__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_market_start__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_MARKET_START
     mock_datetime.side_effect = create_datetime
@@ -157,7 +157,7 @@ def test_time_till_market_open__friday_market_start__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_market_end__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_MARKET_END
     mock_datetime.side_effect = create_datetime
@@ -167,7 +167,7 @@ def test_time_till_market_open__friday_market_end__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_afterhours_start__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_AFTERHOURS_START
     mock_datetime.side_effect = create_datetime
@@ -177,7 +177,7 @@ def test_time_till_market_open__friday_afterhours_start__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_afterhours_end__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_AFTERHOURS_END
     mock_datetime.side_effect = create_datetime
@@ -187,7 +187,7 @@ def test_time_till_market_open__friday_afterhours_end__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_closed_start_into_weekend__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START
     mock_datetime.side_effect = create_datetime
@@ -197,7 +197,7 @@ def test_time_till_market_open__friday_closed_start_into_weekend__seconds(mock_d
     assert time_till_open == 201600
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_11pm__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=3)
     mock_datetime.side_effect = create_datetime
@@ -207,7 +207,7 @@ def test_time_till_market_open__friday_11pm__seconds(mock_datetime):
     assert time_till_open == 190800
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__saturday_1am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=5)
     mock_datetime.side_effect = create_datetime
@@ -217,7 +217,7 @@ def test_time_till_market_open__saturday_1am__seconds(mock_datetime):
     assert time_till_open == 183600
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__saturday_10am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=14)
     mock_datetime.side_effect = create_datetime
@@ -227,7 +227,7 @@ def test_time_till_market_open__saturday_10am__seconds(mock_datetime):
     assert time_till_open == 151200
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__sunday_10am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=38)
     mock_datetime.side_effect = create_datetime
@@ -241,7 +241,7 @@ def test_time_till_market_open__sunday_10am__seconds(mock_datetime):
 # MC: 8h = 28800
 # AH + PM = 34200
 # AH + PM + MC = 63000
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__thursday_otc_closed_start__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_AFTERHOURS_START - \
         timedelta(days=1)
@@ -252,7 +252,7 @@ def test_time_till_market_open__thursday_otc_closed_start__seconds(mock_datetime
     assert time_till_open == 63000
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__thursday_otc_11pm__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_PREMARKET_START - \
         timedelta(hours=5)
@@ -263,7 +263,7 @@ def test_time_till_market_open__thursday_otc_11pm__seconds(mock_datetime):
     assert time_till_open == 37800
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_otc_1am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_PREMARKET_START - \
         timedelta(hours=3)
@@ -274,7 +274,7 @@ def test_time_till_market_open__friday_otc_1am__seconds(mock_datetime):
     assert time_till_open == 30600
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_otc_closed_end__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_PREMARKET_END
     mock_datetime.side_effect = create_datetime
@@ -284,7 +284,7 @@ def test_time_till_market_open__friday_otc_closed_end__seconds(mock_datetime):
     assert time_till_open == 0.000001
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_otc_market_start__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_MARKET_START
     mock_datetime.side_effect = create_datetime
@@ -294,7 +294,7 @@ def test_time_till_market_open__friday_otc_market_start__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_otc_market_end__zero(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_MARKET_END
     mock_datetime.side_effect = create_datetime
@@ -304,7 +304,7 @@ def test_time_till_market_open__friday_otc_market_end__zero(mock_datetime):
     assert time_till_open is 0
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_otc_closed_start_into_weekend__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_AFTERHOURS_START
     mock_datetime.side_effect = create_datetime
@@ -314,7 +314,7 @@ def test_time_till_market_open__friday_otc_closed_start_into_weekend__seconds(mo
     assert time_till_open == 235800
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__friday_otc_11pm__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=3)
     mock_datetime.side_effect = create_datetime
@@ -324,7 +324,7 @@ def test_time_till_market_open__friday_otc_11pm__seconds(mock_datetime):
     assert time_till_open == 210600
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__saturday_otc_1am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=5)
     mock_datetime.side_effect = create_datetime
@@ -334,7 +334,7 @@ def test_time_till_market_open__saturday_otc_1am__seconds(mock_datetime):
     assert time_till_open == 203400
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__saturday_otc_10am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=14)
     mock_datetime.side_effect = create_datetime
@@ -344,7 +344,7 @@ def test_time_till_market_open__saturday_otc_10am__seconds(mock_datetime):
     assert time_till_open == 171000
 
 
-@mock.patch('trader.utils.datetime')
+@mock.patch('trader.utils.timezone')
 def test_time_till_market_open__sunday_otc_10am__seconds(mock_datetime):
     mock_datetime.now.return_value = FRIDAY_CLOSED_START + timedelta(hours=38)
     mock_datetime.side_effect = create_datetime
