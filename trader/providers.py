@@ -556,6 +556,9 @@ class Etrade:
         return self._process_get_positions(response)
 
     def _process_get_position_quantity(self, symbol, positions):
+        if not positions:
+            return None
+
         for position in positions:
             if position['symbolDescription'] == symbol:
                 return position["quantity"]
