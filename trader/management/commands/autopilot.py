@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+import httpx
 import pytz
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -66,8 +67,9 @@ def refresh_passenger_signal(passenger: AutoPilotTask):
 
 
 async def post_webhook(webhook: str, msg: str):
-    # TODO: post to webhook
-    pass
+    async with httpx.AsyncClient() as client:
+        response = await client.request('POST', webhook, data={'content': msg})
+    return response
 
 
 async def get_provider(pilot: AutoPilotTask):
@@ -315,6 +317,10 @@ async def driver(name: str, queue: asyncio.Queue):
         passenger: AutoPilotTask = await queue.get()
         await update_passenger(passenger, {'status': AutoPilotTask.RUNNING})
 
+        if passenger.discord_webhook:
+            await post_webhook(passenger.discord_webhook,
+                               f"{passenger.symbol} tracking...")
+
         while passenger.status == AutoPilotTask.RUNNING:
             etrade: AsyncEtrade = await get_provider(passenger)
             override_signal = await refresh_passenger_signal(passenger)
@@ -346,6 +352,10 @@ async def driver(name: str, queue: asyncio.Queue):
     finally:
         logger.info("%s %s %s.", PREFIX, name,
                     AutoPilotTask.TASK_STATUS[passenger.status][1])
+
+        if passenger and passenger.discord_webhook:
+            await post_webhook(passenger.discord_webhook,
+                               f"{passenger.symbol} autopilot {AutoPilotTask.TASK_STATUS[passenger.status][1]}")
         queue.task_done()
 
 
