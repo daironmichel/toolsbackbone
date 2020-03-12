@@ -9,6 +9,7 @@ import httpx
 import pytz
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from trader.aio.db import database_sync_to_async
@@ -16,8 +17,8 @@ from trader.aio.providers import AsyncEtrade
 from trader.enums import MarketSession, OrderAction, OrderStatus, PriceType
 from trader.models import AutoPilotTask, ProviderSession, ServiceProvider
 from trader.providers import ServiceError
-from trader.utils import (get_ask, get_bid, get_last, get_limit_price,
-                          time_till_market_open)
+from trader.utils import (clean_quote, get_ask, get_bid, get_last,
+                          get_limit_price, time_till_market_open)
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.autopilot")
@@ -101,7 +102,6 @@ async def place_sell_order(passenger: AutoPilotTask, sell_price: Decimal,
         logger.error("place_sell_order: params %s", order_params)
         raise
 
-    # passenger.tracking_order_placed_at = datetime.now()
     return order_id
 
 
@@ -153,9 +153,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         quote = await etrade.get_quote(passenger.symbol)
         bid = get_bid(quote)
         ask = get_ask(quote)
-        placed_at = datetime.fromtimestamp(
-            details.get("placedTime")/1000, tz=pytz.utc)
-        elapsed_time = placed_at - datetime.now(tz=pytz.utc)
+        placed_at = datetime.utcfromtimestamp(
+            details.get("placedTime")/1000).replace(tzinfo=pytz.utc)
+        elapsed_time = timezone.now() - placed_at
         if elapsed_time >= timedelta(seconds=5) and (limit_price < bid or limit_price > ask):
             try:
                 await etrade.cancel_order(passenger.account.account_key,
@@ -270,6 +270,7 @@ async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: Asyn
                  PREFIX, pilot_name)
 
     quote = await etrade.get_quote(passenger.symbol)
+    quote = clean_quote(quote)
     last = get_last(quote)
     passenger.tracking_data['quotes'].append(quote.get('All'))
     if passenger.top_price < last:

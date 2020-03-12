@@ -576,7 +576,7 @@ class Etrade:
         return self._process_get_position(symbol, positions)
 
     def get_transactions(self, account_key, from_date=None, to_date=None):
-        now = datetime.datetime.now(NEW_YORK_TZ)
+        now = timezone.now().astimezone(NEW_YORK_TZ)
         params = {}
         if not from_date:
             from_date = now - timedelta(days=7)

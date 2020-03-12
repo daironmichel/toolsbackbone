@@ -93,3 +93,67 @@ def get_volume(quote: dict) -> Decimal:
     if MarketSession.current() == MarketSession.EXTENDED and eh_data:
         return Decimal(str(eh_data.get("volume")))
     return Decimal(str(data.get("totalVolume")))
+
+
+QUOTE_UNWANTED_DATA = [
+    "pe",
+    "eps",
+    "upc",
+    "beta",
+    "yield",
+    "askTime",
+    "bidTime",
+    "dirLast",
+    "dividend",
+    "bidExchange",
+    "changeClose",
+    "companyName",
+    "estEarnings",
+    "optionStyle",
+    "timePremium",
+    "adjustedFlag",
+    "contractSize",
+    "openInterest",
+    "week52HiDate",
+    "averageVolume",
+    "week52LowDate",
+    "exDividendDate",
+    "expirationDate",
+    "intrinsicValue",
+    "cashDeliverable",
+    "nextEarningDate",
+    "optionUnderlier",
+    "timeOfLastTrade",
+    "daysToExpiration",
+    "declaredDividend",
+    "optionMultiplier",
+    "previousDayVolume",
+    "symbolDescription",
+    "dividendPayableDate",
+    "changeClosePercentage",
+]
+
+EH_QUOTE_UNWANTED_DATA = [
+    "change",
+    "percentChange",
+    "timeOfLastTrade",
+    "timeZone",
+    "quoteStatus",
+]
+
+
+def clean_quote(quote: dict) -> dict:
+    quote_data = quote.get("All")
+    for key in QUOTE_UNWANTED_DATA:
+        if key in quote_data:
+            del quote_data[key]
+
+    eh_quote_data = quote_data.ge("ExtendedHourQuoteDetail")
+    if not eh_quote_data:
+        return
+
+    for key in EH_QUOTE_UNWANTED_DATA:
+        if key in eh_quote_data[key]:
+            del eh_quote_data[key]
+
+    return quote
