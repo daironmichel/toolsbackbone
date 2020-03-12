@@ -280,7 +280,8 @@ class Etrade:
         return quotes[0]
 
     def get_quote(self, symbol):
-        response = self.get(f'/market/quote/{symbol}.json')
+        params = {'detailFlag': 'ALL'}
+        response = self.get(f'/market/quote/{symbol}.json', params=params)
         return self._process_get_quote(response)
 
     def get_last_trade_price(self, symbol: str) -> Decimal:
