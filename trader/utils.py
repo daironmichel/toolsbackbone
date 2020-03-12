@@ -148,7 +148,7 @@ def clean_quote(quote: dict) -> dict:
         if key in quote_data:
             del quote_data[key]
 
-    eh_quote_data = quote_data.ge("ExtendedHourQuoteDetail")
+    eh_quote_data = quote_data.get("ExtendedHourQuoteDetail")
     if not eh_quote_data:
         return
 
