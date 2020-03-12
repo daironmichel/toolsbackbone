@@ -57,19 +57,6 @@ class MarketSession(enum.Enum):
             hour=16, minute=0, second=0, microsecond=0)
         afterhours_end = now.replace(
             hour=20, minute=0, second=0, microsecond=0)
-        # now = NEW_YORK_TZ.localize(datetime.now())
-
-        # if now.weekday() >= 5:
-        #     return None  # no session on weekends
-
-        # premarket_start = NEW_YORK_TZ.localize(datetime(
-        #     now.year, now.month, now.day, 4))
-        # market_open = NEW_YORK_TZ.localize(datetime(
-        #     now.year, now.month, now.day, 9, 30))
-        # market_close = NEW_YORK_TZ.localize(datetime(
-        #     now.year, now.month, now.day, 16))
-        # afterhours_end = NEW_YORK_TZ.localize(datetime(
-        #     now.year, now.month, now.day, 20))
 
         if now < premarket_start or now >= afterhours_end:
             return None

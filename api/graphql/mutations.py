@@ -15,7 +15,7 @@ from trader.enums import MarketSession, OrderAction, PriceType
 from trader.models import (Account, AutoPilotTask, ProviderSession, Settings,
                            TradingStrategy)
 from trader.providers import get_provider_instance
-from trader.utils import get_limit_price, get_round_price
+from trader.utils import get_ask, get_bid, get_limit_price, get_round_price
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.api")
@@ -228,7 +228,11 @@ class BuyStock(relay.ClientIDMutation):
             task.save()
             return BuyStock()
 
-        last_price = Decimal(price) if price else etrade.get_bid_price(symbol)
+        if price:
+            last_price = Decimal(price)
+        else:
+            quote = etrade.get_quote(symbol)
+            last_price = get_bid(quote)
 
         limit_price = get_limit_price(OrderAction.BUY, last_price,
                                       strategy.price_margin)
@@ -287,7 +291,8 @@ class SellStock(relay.ClientIDMutation):
 
         etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
-        last_price = etrade.get_ask_price(symbol)
+        quote = etrade.get_quote(symbol)
+        last_price = get_ask(quote)
 
         order_params = {
             'account_key': account_key,
@@ -365,7 +370,8 @@ class StopProfit(relay.ClientIDMutation):
             profit_amount = entry_price * (strategy.profit_percent / 100)
             stop_price = get_round_price(entry_price + profit_amount)
         else:
-            last_price = etrade.get_ask_price(symbol)
+            quote = etrade.get_quote(symbol)
+            last_price = get_ask(quote)
             profit_amount = last_price * Decimal('0.02')
             stop_price = get_round_price(last_price + profit_amount)
 
@@ -429,7 +435,8 @@ class StopLoss(relay.ClientIDMutation):
 
         etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
-        last_price = etrade.get_bid_price(symbol)
+        quote = etrade.get_quote(symbol)
+        last_price = get_bid(quote)
         stop_price = get_round_price(
             last_price - (last_price * Decimal('0.02')))
         limit_price = get_limit_price(

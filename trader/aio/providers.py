@@ -97,14 +97,6 @@ class AsyncEtrade(Etrade):
         response = await self.get(f'/market/quote/{symbol}.json', params=params)
         return self._process_get_quote(response)
 
-    async def get_bid_price(self, symbol: str) -> Decimal:
-        quote = await self.get_quote(symbol)
-        return Decimal(str(quote.get("All").get("bid")))
-
-    async def get_ask_price(self, symbol: str) -> Decimal:
-        quote = await self.get_quote(symbol)
-        return Decimal(str(quote.get("All").get("ask")))
-
     async def preview_order(self, account_key, order_client_id, market_session, action,
                             symbol, price_type, quantity, limit_price, stop_price=""):
         headers, payload = self._prepare_preview_order(order_client_id, market_session,

@@ -8,6 +8,7 @@ from graphene_django.types import DjangoObjectType
 from trader.models import (Account, AutoPilotTask, Broker, ProviderSession,
                            ServiceProvider, Settings, TradingStrategy)
 from trader.providers import get_provider_instance
+from trader.utils import get_ask, get_bid, get_last, get_volume
 
 from .graphene_overrides import NonNullConnection
 
@@ -118,8 +119,10 @@ class ServiceProviderNode(DjangoObjectType):
             return None
 
         return QuoteType(
-            volume=quote_data.get('All').get('totalVolume'),
-            last_trade=Decimal(str(quote_data.get('All').get('lastTrade'))),
+            volume=get_volume(quote_data),
+            last_trade=get_last(quote_data),
+            bid=get_bid(quote_data),
+            ask=get_ask(quote_data),
             last_trade_direction=Decimal(
                 str(quote_data.get('All').get('dirLast'))),
             market_cap=Decimal(str(quote_data.get('All').get('marketCap'))),
@@ -250,6 +253,8 @@ class AutoPilotTaskConnection(NonNullConnection):
 class QuoteType(graphene.ObjectType):
     volume = graphene.Int()
     last_trade = graphene.Decimal()
+    bid = graphene.Decimal()
+    ask = graphene.Decimal()
     last_trade_direction = graphene.Decimal()
     market_cap = graphene.Decimal()
     shares_outstanding = graphene.Int()

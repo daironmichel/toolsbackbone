@@ -16,7 +16,8 @@ from trader.aio.providers import AsyncEtrade
 from trader.enums import MarketSession, OrderAction, OrderStatus, PriceType
 from trader.models import AutoPilotTask, ProviderSession, ServiceProvider
 from trader.providers import ServiceError
-from trader.utils import get_limit_price, time_till_market_open
+from trader.utils import (get_ask, get_bid, get_last, get_limit_price,
+                          time_till_market_open)
 
 # pylint: disable=invalid-name
 logger = logging.getLogger("trader.autopilot")
@@ -124,11 +125,9 @@ async def commit_sell(passenger: AutoPilotTask, sell_price: Decimal,
 
 
 async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
-    # last = Decimal(quote.get('All').get('lastTrade'))
-
     if not passenger.tracking_order_id:
         quote = await etrade.get_quote(passenger.symbol)
-        ask = Decimal(quote.get('All').get('ask'))
+        ask = get_ask(quote)
         await commit_sell(passenger, ask, etrade)
         return
 
@@ -152,8 +151,8 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
 
     if status in (OrderStatus.OPEN, OrderStatus.PARTIAL):
         quote = await etrade.get_quote(passenger.symbol)
-        ask = Decimal(quote.get('All').get('ask'))
-        bid = Decimal(quote.get('All').get('bid'))
+        bid = get_bid(quote)
+        ask = get_ask(quote)
         placed_at = datetime.fromtimestamp(
             details.get("placedTime")/1000, tz=pytz.utc)
         elapsed_time = placed_at - datetime.now(tz=pytz.utc)
@@ -182,7 +181,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         await update_passenger(passenger, update_fields)
 
         quote = await etrade.get_quote(passenger.symbol)
-        ask = Decimal(quote.get('All').get('ask'))
+        ask = get_ask(quote)
         await commit_sell(passenger, ask, etrade)
 
     elif status == OrderStatus.REJECTED:
@@ -229,9 +228,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
 
 async def follow_strategy(pilot_name: str, passenger: AutoPilotTask,
                           etrade: AsyncEtrade, quote: dict):
-    last = Decimal(quote.get('All').get('lastTrade'))
-    bid = Decimal(quote.get('All').get('bid'))
-    ask = Decimal(quote.get('All').get('ask'))
+    last = get_last(quote)
+    bid = get_bid(quote)
+    ask = get_ask(quote)
 
     if bid < passenger.loss_price or ask > passenger.profit_price or last < passenger.pullback_price:
         if bid < passenger.loss_price:
@@ -258,7 +257,7 @@ async def minimize_loss(pilot_name: str, passenger: AutoPilotTask,
     if passenger.state == AutoPilotTask.SELLING:
         return
 
-    bid = Decimal(quote.get('All').get('bid'))
+    bid = get_bid(quote)
     ref_price_thresdhold = passenger.loss_ref_price + passenger.loss_amount * 2
     if bid > ref_price_thresdhold:
         update_fields = {
@@ -271,12 +270,10 @@ async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: Asyn
                  PREFIX, pilot_name)
 
     quote = await etrade.get_quote(passenger.symbol)
-    last = Decimal(quote.get('All').get('lastTrade'))
+    last = get_last(quote)
     passenger.tracking_data['quotes'].append(quote.get('All'))
     if passenger.top_price < last:
         passenger.tracking_data['top'] = str(last)
-    # bid = Decimal(quote.get('All').get('bid'))
-    # ask = Decimal(quote.get('All').get('ask'))
 
     if passenger.modifier == AutoPilotTask.FOLLOW_STRATEGY:
         await follow_strategy(pilot_name, passenger, etrade, quote)

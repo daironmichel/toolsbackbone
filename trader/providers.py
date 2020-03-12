@@ -10,6 +10,7 @@ from django.utils import timezone
 from rauth import OAuth1Service
 
 from trader.const import NEW_YORK_TZ
+from trader.enums import MarketSession
 
 from .models import Account, ProviderSession, ServiceProvider
 
@@ -283,18 +284,6 @@ class Etrade:
         params = {'detailFlag': 'ALL'}
         response = self.get(f'/market/quote/{symbol}.json', params=params)
         return self._process_get_quote(response)
-
-    def get_last_trade_price(self, symbol: str) -> Decimal:
-        quote = self.get_quote(symbol)
-        return Decimal(str(quote.get("All").get("lastTrade")))
-
-    def get_bid_price(self, symbol: str) -> Decimal:
-        quote = self.get_quote(symbol)
-        return Decimal(str(quote.get("All").get("bid")))
-
-    def get_ask_price(self, symbol: str) -> Decimal:
-        quote = self.get_quote(symbol)
-        return Decimal(str(quote.get("All").get("ask")))
 
     @staticmethod
     def _build_order_payload(market_session, action, symbol, price_type, limit_price, stop_price, quantity):

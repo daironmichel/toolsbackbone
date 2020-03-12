@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from trader.const import NEW_YORK_TZ
 
-from .enums import OrderAction
+from .enums import MarketSession, OrderAction
 
 
 def get_limit_price(action: OrderAction, price: Decimal, margin: Decimal) -> Decimal:
@@ -61,3 +61,35 @@ def time_till_market_open(otc=False):
 
     time_till_open = open_time - now
     return time_till_open.total_seconds()
+
+
+def get_bid(quote: dict) -> Decimal:
+    data = quote.get("All")
+    eh_data = data.get("ExtendedHourQuoteDetail", None)
+    if MarketSession.current() == MarketSession.EXTENDED and eh_data:
+        return Decimal(str(eh_data.get("bid")))
+    return Decimal(str(data.get("bid")))
+
+
+def get_ask(quote: dict) -> Decimal:
+    data = quote.get("All")
+    eh_data = data.get("ExtendedHourQuoteDetail", None)
+    if MarketSession.current() == MarketSession.EXTENDED and eh_data:
+        return Decimal(str(eh_data.get("ask")))
+    return Decimal(str(data.get("ask")))
+
+
+def get_last(quote: dict) -> Decimal:
+    data = quote.get("All")
+    eh_data = data.get("ExtendedHourQuoteDetail", None)
+    if MarketSession.current() == MarketSession.EXTENDED and eh_data:
+        return Decimal(str(eh_data.get("lastPrice")))
+    return Decimal(str(data.get("lastPrice")))
+
+
+def get_volume(quote: dict) -> Decimal:
+    data = quote.get("All")
+    eh_data = data.get("ExtendedHourQuoteDetail", None)
+    if MarketSession.current() == MarketSession.EXTENDED and eh_data:
+        return Decimal(str(eh_data.get("volume")))
+    return Decimal(str(data.get("totalVolume")))
