@@ -150,7 +150,7 @@ def clean_quote(quote: dict) -> dict:
 
     eh_quote_data = quote_data.get("ExtendedHourQuoteDetail")
     if not eh_quote_data:
-        return
+        return quote
 
     for key in EH_QUOTE_UNWANTED_DATA:
         if key in eh_quote_data[key]:
