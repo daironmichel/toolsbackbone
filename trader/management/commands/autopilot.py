@@ -229,15 +229,19 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
 
 async def follow_strategy(pilot_name: str, passenger: AutoPilotTask,
                           etrade: AsyncEtrade, quote: dict):
+    last = Decimal(quote.get('All').get('lastTrade'))
     bid = Decimal(quote.get('All').get('bid'))
     ask = Decimal(quote.get('All').get('ask'))
 
-    if bid < passenger.loss_price or ask > passenger.profit_price:
+    if bid < passenger.loss_price or ask > passenger.profit_price or last < passenger.pullback_price:
         if bid < passenger.loss_price:
             logger.debug("%s %s bid reached the loss price, placing sell order at %s",
                          PREFIX, pilot_name, ask)
-        else:
+        elif ask > passenger.profit_price:
             logger.debug("%s %s ask reached the profit price, placing sell order at %s",
+                         PREFIX, pilot_name, ask)
+        else:
+            logger.debug("%s %s last price reached the pullback price, placing sell order at %s",
                          PREFIX, pilot_name, ask)
 
         order_id = await place_sell_order(passenger, ask, etrade)
@@ -267,7 +271,10 @@ async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: Asyn
                  PREFIX, pilot_name)
 
     quote = await etrade.get_quote(passenger.symbol)
-    # last = Decimal(quote.get('All').get('lastTrade'))
+    last = Decimal(quote.get('All').get('lastTrade'))
+    passenger.tracking_data['quotes'].append(quote.get('All'))
+    if passenger.top_price < last:
+        passenger.tracking_data['top'] = str(last)
     # bid = Decimal(quote.get('All').get('bid'))
     # ask = Decimal(quote.get('All').get('ask'))
 
@@ -336,10 +343,21 @@ async def driver(name: str, queue: asyncio.Queue):
             else:
                 await track_position(name, passenger, etrade)
 
-        if passenger.status == AutoPilotTask.DONE:
-            await delete_passenger(passenger)
-    except asyncio.CancelledError:
+        # do not delete, keeping history is better
+        # if passenger.status == AutoPilotTask.DONE:
+        #     await delete_passenger(passenger)
+    except asyncio.CancelledError as e:
         logger.info("%s %s stopping...", PREFIX, name)
+        update_fields = {'status': AutoPilotTask.PAUSED,
+                         'state': AutoPilotTask.ERROR,
+                         'error_message': str(e),
+                         'tracking_data': passenger.tracking_data}
+        await update_passenger(passenger, update_fields)
+        if passenger and passenger.discord_webhook:
+            await post_webhook(
+                passenger.discord_webhook,
+                f"{passenger.symbol} autopilot {AutoPilotTask.TASK_STATUS[passenger.status][1]}. {str(e)}"
+            )
 
     except Exception as exception:  # pylint: disable=broad-except
         logger.error("%s %s %s: %s", PREFIX, name,
@@ -347,15 +365,19 @@ async def driver(name: str, queue: asyncio.Queue):
                      str(exception), exc_info=1)
         update_fields = {'status': AutoPilotTask.PAUSED,
                          'state': AutoPilotTask.ERROR,
-                         'error_message': str(exception)}
+                         'error_message': str(exception),
+                         'tracking_data': passenger.tracking_data}
         await update_passenger(passenger, update_fields)
+        if passenger and passenger.discord_webhook:
+            await post_webhook(
+                passenger.discord_webhook,
+                f"{passenger.symbol} autopilot {AutoPilotTask.TASK_STATUS[passenger.status][1]}. {str(exception)}"
+            )
     finally:
         logger.info("%s %s %s.", PREFIX, name,
                     AutoPilotTask.TASK_STATUS[passenger.status][1])
-
-        if passenger and passenger.discord_webhook:
-            await post_webhook(passenger.discord_webhook,
-                               f"{passenger.symbol} autopilot {AutoPilotTask.TASK_STATUS[passenger.status][1]}")
+        update_fields = {'tracking_data': passenger.tracking_data}
+        await update_passenger(passenger, update_fields)
         queue.task_done()
 
 

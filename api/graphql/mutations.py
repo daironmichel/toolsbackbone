@@ -250,6 +250,8 @@ class BuyStock(relay.ClientIDMutation):
         etrade.place_order(order_client_id=get_random_string(length=20),
                            preview_ids=preview_ids, **order_params)
 
+        # TODO: HANDLE Code: 1527. Message: Opening orders for this security cannot be accepted online at this time. For assistance with placing this order, please contact Customer Service at 1-800-ETRADE-1 (1-800-387-2331).
+
         return BuyStock()
 
 

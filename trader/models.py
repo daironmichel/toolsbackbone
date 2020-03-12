@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import JSONField
 from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils.text import slugify
@@ -60,11 +61,13 @@ class Account(models.Model):
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
     exposure_percent = models.DecimalField(
-        max_digits=3, decimal_places=0, validators=[MaxValueValidator(Decimal(100))])
+        max_digits=5, decimal_places=2, validators=[MaxValueValidator(Decimal(100))])
     profit_percent = models.DecimalField(
-        max_digits=3, decimal_places=0, validators=[MaxValueValidator(Decimal(100))])
+        max_digits=5, decimal_places=2, validators=[MaxValueValidator(Decimal(100))])
     loss_percent = models.DecimalField(
-        max_digits=3, decimal_places=0, validators=[MaxValueValidator(Decimal(100))])
+        max_digits=5, decimal_places=2, validators=[MaxValueValidator(Decimal(100))])
+    pullback_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, validators=[MaxValueValidator(Decimal(100))], default=Decimal('0'), blank=True)
     fee_per_trade = models.DecimalField(
         max_digits=5, decimal_places=2, default=0)
     price_margin = models.DecimalField(
@@ -162,6 +165,10 @@ class ServiceProvider(models.Model):
             provider=self).first()
 
 
+def default_tracking_data():
+    return {'quotes': [], 'top': '0'}
+
+
 class ProviderSession(models.Model):
     REQUESTING = 0
     CONNECTED = 1
@@ -244,6 +251,7 @@ class AutoPilotTask(models.Model):
     signal = models.SmallIntegerField(choices=SIGNALS, default=AUTO)
     state = models.SmallIntegerField(choices=STATES, default=WATCHING)
     modifier = models.SmallIntegerField(choices=MODS, default=FOLLOW_STRATEGY)
+    tracking_data = JSONField(default=default_tracking_data)
 
     strategy = models.ForeignKey(
         TradingStrategy, on_delete=models.PROTECT, related_name='+')
@@ -294,16 +302,33 @@ class AutoPilotTask(models.Model):
         return get_round_price(self.base_price * (self.strategy.loss_percent / Decimal('100')))
 
     @property
-    def profit_amount(self) -> Decimal:
-        return get_round_price(self.base_price * (self.strategy.profit_percent / Decimal('100')))
-
-    @property
     def loss_price(self) -> Decimal:
         return get_round_price(self.loss_ref_price - self.loss_amount)
 
     @property
+    def profit_amount(self) -> Decimal:
+        return get_round_price(self.base_price * (self.strategy.profit_percent / Decimal('100')))
+
+    @property
     def profit_price(self) -> Decimal:
         return get_round_price(self.profit_ref_price + self.profit_amount)
+
+    @property
+    def top_price(self) -> Decimal:
+        top_data = self.tracking_data.get('top', '0')
+
+        if not top_data:
+            return Decimal('0')
+
+        return Decimal(top_data)
+
+    @property
+    def pullback_amount(self) -> Decimal:
+        return get_round_price(self.top_price * (self.strategy.pullback_percent / Decimal('100')))
+
+    @property
+    def pullback_price(self) -> Decimal:
+        return get_round_price(self.top_price - self.pullback_amount)
 
 
 class Settings(models.Model):
