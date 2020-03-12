@@ -93,7 +93,8 @@ class AsyncEtrade(Etrade):
         return now.date() == refreshed.date() and now - refreshed < timedelta(hours=2)
 
     async def get_quote(self, symbol):
-        response = await self.get(f'/market/quote/{symbol}.json')
+        params = {'detailFlag': 'ALL'}
+        response = await self.get(f'/market/quote/{symbol}.json', params=params)
         return self._process_get_quote(response)
 
     async def get_bid_price(self, symbol: str) -> Decimal:
