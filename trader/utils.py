@@ -84,7 +84,7 @@ def get_last(quote: dict) -> Decimal:
     eh_data = data.get("ExtendedHourQuoteDetail", None)
     if MarketSession.current() == MarketSession.EXTENDED and eh_data:
         return Decimal(str(eh_data.get("lastPrice")))
-    return Decimal(str(data.get("lastPrice")))
+    return Decimal(str(data.get("lastTrade")))
 
 
 def get_volume(quote: dict) -> Decimal:

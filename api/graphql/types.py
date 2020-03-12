@@ -120,7 +120,7 @@ class ServiceProviderNode(DjangoObjectType):
 
         return QuoteType(
             volume=get_volume(quote_data),
-            last_trade=get_last(quote_data),
+            last=get_last(quote_data),
             bid=get_bid(quote_data),
             ask=get_ask(quote_data),
             last_trade_direction=Decimal(
@@ -252,7 +252,7 @@ class AutoPilotTaskConnection(NonNullConnection):
 
 class QuoteType(graphene.ObjectType):
     volume = graphene.Int()
-    last_trade = graphene.Decimal()
+    last = graphene.Decimal()
     bid = graphene.Decimal()
     ask = graphene.Decimal()
     last_trade_direction = graphene.Decimal()
