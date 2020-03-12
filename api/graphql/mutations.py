@@ -665,7 +665,7 @@ class AutoPilotON(relay.ClientIDMutation):
             return AutoPilotON(error=AutoPilotONError.ACCOUNT_REQUIRED,
                                error_message='Either set the account_id param or configure a default.')
 
-        if AutoPilotTask.objects.filter(symbol=symbol).exists():
+        if AutoPilotTask.objects.filter(symbol=symbol, status=AutoPilotTask.RUNNING).exists():
             return AutoPilotON(error=AutoPilotONError.ALREADY_EXISTS,
                                error_message=f'Autopilot for {symbol} already exists.')
 
