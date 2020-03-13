@@ -153,7 +153,7 @@ def clean_quote(quote: dict) -> dict:
         return quote
 
     for key in EH_QUOTE_UNWANTED_DATA:
-        if key in eh_quote_data[key]:
+        if key in eh_quote_data:
             del eh_quote_data[key]
 
     return quote
