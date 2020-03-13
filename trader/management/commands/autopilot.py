@@ -272,7 +272,7 @@ async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: Asyn
     quote = await etrade.get_quote(passenger.symbol)
     quote = clean_quote(quote)
     last = get_last(quote)
-    passenger.tracking_data['quotes'].append(quote.get('All'))
+    # passenger.tracking_data['quotes'].append(quote.get('All'))
     if passenger.top_price < last:
         passenger.tracking_data['top'] = str(last)
 
