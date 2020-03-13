@@ -324,10 +324,18 @@ class AutoPilotTask(models.Model):
 
     @property
     def pullback_amount(self) -> Decimal:
+        if not self.strategy.pullback_percent:
+            return Decimal('0')
+
+        if not self.top_price:
+            return Decimal('0')
+
         return get_round_price(self.top_price * (self.strategy.pullback_percent / Decimal('100')))
 
     @property
     def pullback_price(self) -> Decimal:
+        if not self.pullback_amount:
+            return Decimal('0')
         return get_round_price(self.top_price - self.pullback_amount)
 
 
