@@ -55,7 +55,8 @@ class AsyncEtrade(Etrade):
 
         self._log_request(method, url, **kwargs)
 
-        async with httpx.AsyncClient(auth=auth) as client:
+        timeout = httpx.TimeoutConfig(5.0, read_timeout=60.0)
+        async with httpx.AsyncClient(auth=auth, timeout=timeout) as client:
             response = await client.request(method, url, **kwargs)
 
         self._log_response(response)

@@ -69,7 +69,8 @@ def refresh_passenger_signal(passenger: AutoPilotTask):
 
 
 async def post_webhook(webhook: str, msg: str):
-    async with httpx.AsyncClient() as client:
+    timeout = httpx.TimeoutConfig(5.0, read_timeout=60.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.request('POST', webhook, data={'content': msg})
     return response
 
