@@ -341,6 +341,8 @@ async def driver(name: str, queue: asyncio.Queue):
             else:
                 await track_position(name, passenger, etrade)
 
+            await asyncio.sleep(1)
+
         # do not delete, keeping history is better
         # if passenger.status == AutoPilotTask.DONE:
         #     await delete_passenger(passenger)

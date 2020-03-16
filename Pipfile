@@ -20,7 +20,7 @@ graphene-django = "*"
 django-rest-auth = "*"
 rauth = "*"
 redis = "*"
-httpx = "==0.11.1"
+httpx = "==0.12.0"
 pytest-asyncio = "*"
 
 [requires]
