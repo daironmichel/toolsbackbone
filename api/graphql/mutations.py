@@ -23,7 +23,7 @@ logger = logging.getLogger("trader.api")
 
 def get_autopilot(user_id: int, symbol: str) -> AutoPilotTask:
     return AutoPilotTask.objects.filter(
-        user_id=user_id, symbol=symbol).first()
+        user_id=user_id, symbol=symbol, status=AutoPilotTask.RUNNING).first()
 
 
 def turn_off_autopilot(user_id: int, symbol: str) -> bool:
