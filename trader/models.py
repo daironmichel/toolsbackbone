@@ -267,6 +267,8 @@ class AutoPilotTask(models.Model):
     quantity = models.IntegerField(default=0, blank=True)
     entry_price = models.DecimalField(
         max_digits=12, decimal_places=4, default=0, blank=True)
+    exit_price = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0, blank=True)
     is_otc = models.BooleanField(default=False, blank=True)
 
     error_message = models.CharField(max_length=500, default='', blank=True)
@@ -337,6 +339,12 @@ class AutoPilotTask(models.Model):
         if not self.pullback_amount:
             return Decimal('0')
         return get_round_price(self.top_price - self.pullback_amount)
+
+    @property
+    def exit_percent(self) -> Decimal:
+        gain = self.exit_price - self.entry_price
+        percent = gain / self.entry_price * Decimal(100)
+        return percent.quantize(Decimal('0.01'))
 
 
 class Settings(models.Model):

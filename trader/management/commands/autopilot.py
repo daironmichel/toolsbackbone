@@ -198,14 +198,14 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         quantity = await etrade.get_position_quantity(passenger.account.account_key,
                                                       passenger.symbol)
         if quantity in (None, 0):
-            update_fields = {'status': AutoPilotTask.DONE}
-            await update_passenger(passenger, update_fields)
             instrument = details.get("Instrument")[0]
             avg_execution_price = Decimal(
                 instrument.get("averageExecutionPrice"))
-            percent = (avg_execution_price -
-                       passenger.entry_price) / passenger.entry_price * Decimal(100)
-            percent = percent.quantize(Decimal('0.01'))
+            update_fields = {'status': AutoPilotTask.DONE,
+                             'exit_price': avg_execution_price}
+            await update_passenger(passenger, update_fields)
+
+            percent = passenger.exit_percent
             percent_label = "profit" if percent > Decimal(0) else "loss"
             logger.info("%s %s position sold for a %s%% %s",
                         PREFIX, pilot_name, percent, percent_label)
@@ -235,14 +235,14 @@ async def follow_strategy(pilot_name: str, passenger: AutoPilotTask,
 
     if bid < passenger.loss_price or ask > passenger.profit_price or last < passenger.pullback_price:
         if bid < passenger.loss_price:
-            logger.debug("%s %s bid reached the loss price, placing sell order at %s",
-                         PREFIX, pilot_name, ask)
+            logger.info("%s %s bid reached the loss price, placing sell order at %s",
+                        PREFIX, pilot_name, ask)
         elif ask > passenger.profit_price:
-            logger.debug("%s %s ask reached the profit price, placing sell order at %s",
-                         PREFIX, pilot_name, ask)
+            logger.info("%s %s ask reached the profit price, placing sell order at %s",
+                        PREFIX, pilot_name, ask)
         else:
-            logger.debug("%s %s last price reached the pullback price, placing sell order at %s",
-                         PREFIX, pilot_name, ask)
+            logger.info("%s %s last price reached the pullback price, placing sell order at %s",
+                        PREFIX, pilot_name, ask)
 
         order_id = await place_sell_order(passenger, ask, etrade)
 
