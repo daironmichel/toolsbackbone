@@ -266,7 +266,7 @@ class AutoPilotTask(models.Model):
     symbol = models.CharField(max_length=10)
     quantity = models.IntegerField(default=0, blank=True)
     entry_price = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0, blank=True)
+        max_digits=12, decimal_places=4, default=0, blank=True)
     is_otc = models.BooleanField(default=False, blank=True)
 
     error_message = models.CharField(max_length=500, default='', blank=True)
@@ -279,15 +279,15 @@ class AutoPilotTask(models.Model):
     # loss percentage. It may increase to accommodate for higher price.
     # for example: when maximazing profit a 3% drop at the highest profit point
     # is a much bigger amount than a 3% drop at the entry price
-    base_price = models.DecimalField(max_digits=12, decimal_places=2)
+    base_price = models.DecimalField(max_digits=12, decimal_places=4)
 
     # price used to determine the stop price at which the position
     # should be sold for a profit. It will increase depending on modifier.
-    profit_ref_price = models.DecimalField(max_digits=12, decimal_places=2)
+    profit_ref_price = models.DecimalField(max_digits=12, decimal_places=4)
 
     # price used to determine the stop price at which the position
     # should be sold for a loss. It will increase depending on modifier.
-    loss_ref_price = models.DecimalField(max_digits=12, decimal_places=2)
+    loss_ref_price = models.DecimalField(max_digits=12, decimal_places=4)
 
     # timestamp used to determine if ref_price should be moved up
     # after certain amount of time have passed where the stock

@@ -205,7 +205,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
                 instrument.get("averageExecutionPrice"))
             percent = (avg_execution_price -
                        passenger.entry_price) / passenger.entry_price * Decimal(100)
-            percent = percent.quantize(Decimal('1'))
+            percent = percent.quantize(Decimal('0.01'))
             percent_label = "profit" if percent > Decimal(0) else "loss"
             logger.info("%s %s position sold for a %s%% %s",
                         PREFIX, pilot_name, percent, percent_label)
