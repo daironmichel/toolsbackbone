@@ -522,7 +522,8 @@ class PositionType(graphene.ObjectType):
                 f'Expecting a value for symbol. Got: "{symbol}"')
 
         return AutoPilotTask.objects.filter(
-            symbol=symbol, user_id=info.context.user.id).first()
+            symbol=symbol, status=AutoPilotTask.RUNNING, user_id=info.context.user.id) \
+            .order_by('-id').first()
 
 
 class ViewerCredentialsType(graphene.ObjectType):
