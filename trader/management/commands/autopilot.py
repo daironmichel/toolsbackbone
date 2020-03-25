@@ -216,6 +216,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
             # TODO: place sell order for scale out quantity
             update_fields = {'quantity': quantity}
             await update_passenger(passenger, update_fields)
+
+            quote = await etrade.get_quote(passenger.symbol)
+            ask = get_ask(quote)
             await commit_sell(passenger, ask, etrade)
     else:
         logger.error("%s %s unhandled status %s for order %s",
@@ -349,15 +352,14 @@ async def driver(name: str, queue: asyncio.Queue):
         #     await delete_passenger(passenger)
     except asyncio.CancelledError as e:
         logger.info("%s %s stopping...", PREFIX, name)
-        update_fields = {'status': AutoPilotTask.PAUSED,
-                         'state': AutoPilotTask.ERROR,
-                         'error_message': str(e),
+        # unexpected cancellation, mark as ready to run on server restart
+        update_fields = {'status': AutoPilotTask.READY,
                          'tracking_data': passenger.tracking_data}
         await update_passenger(passenger, update_fields)
         if passenger and passenger.discord_webhook:
             await post_webhook(
                 passenger.discord_webhook,
-                f"{passenger.symbol} autopilot {AutoPilotTask.TASK_STATUS[passenger.status][1]}. {str(e)}"
+                f"{passenger.symbol} autopilot unexpected cancel. {str(e)}"
             )
 
     except Exception as exception:  # pylint: disable=broad-except
