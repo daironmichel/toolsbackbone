@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import signal
-import time
+import sys
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -15,7 +15,7 @@ from django.utils.crypto import get_random_string
 from trader.aio.db import database_sync_to_async
 from trader.aio.providers import AsyncEtrade
 from trader.enums import MarketSession, OrderAction, OrderStatus, PriceType
-from trader.models import AutoPilotTask, ProviderSession, ServiceProvider
+from trader.models import AutoPilotTask, ProviderSession
 from trader.providers import ServiceError
 from trader.utils import (clean_quote, get_ask, get_bid, get_last,
                           get_limit_price, time_till_market_open)
@@ -29,7 +29,7 @@ PREFIX = "[autopilot]"
 def get_passengers():
     return list(
         AutoPilotTask.objects.all()
-        .select_related('provider', 'provider__broker', 'strategy', 'account', 'user')
+        .select_related('provider', 'provider', 'strategy', 'account', 'user')
         .filter(status=AutoPilotTask.READY)
     )
 
@@ -38,7 +38,8 @@ def get_passengers():
 def recall_stranded_passengers():
     passengers = AutoPilotTask.objects.all() \
         .filter(status=AutoPilotTask.RUNNING)
-    passengers.update(status=AutoPilotTask.READY)
+    if passengers.exists():
+        passengers.update(status=AutoPilotTask.READY)
 
 
 @database_sync_to_async
@@ -53,19 +54,13 @@ def delete_passenger(passenger: AutoPilotTask):
 
 
 @database_sync_to_async
-def update_passenger(passenger: AutoPilotTask, fields: dict):
-    updated_fields = []
-    for field, value in fields.items():
-        setattr(passenger, field, value)
-        updated_fields.append(field)
-    passenger.save(update_fields=updated_fields)
+def save_passenger(passenger: AutoPilotTask):
+    passenger.save()
 
 
 @database_sync_to_async
-def refresh_passenger_signal(passenger: AutoPilotTask):
-    # deleting model field will cause a refresh from db on get
-    del passenger.signal
-    return passenger.signal
+def refresh_passenger(passenger: AutoPilotTask):
+    return passenger.refresh_from_db(fields=passenger.get_field_names())
 
 
 async def post_webhook(webhook: str, msg: str):
@@ -120,9 +115,8 @@ async def commit_sell(passenger: AutoPilotTask, sell_price: Decimal,
                       etrade: AsyncEtrade):
     order_id = await place_sell_order(passenger, sell_price, etrade)
 
-    update_fields = {'state': AutoPilotTask.SELLING,
-                     'tracking_order_id': order_id}
-    await update_passenger(passenger, update_fields)
+    passenger.state = AutoPilotTask.SELLING
+    passenger.tracking_order_id = order_id
 
 
 async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
@@ -139,11 +133,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         logger.info("%s %s unable to track sell order %s. NOT FOUND.",
                     PREFIX, pilot_name, passenger.tracking_order_id)
 
-        update_fields = {
-            'status': AutoPilotTask.PAUSED,
-            'state': AutoPilotTask.ERROR,
-            'error_message': f'unable to track selling order {passenger.tracking_order_id}. NOT FOUND'}
-        await update_passenger(passenger, update_fields)
+        passenger.status = AutoPilotTask.PAUSED
+        passenger.state = AutoPilotTask.ERROR
+        passenger.error_message = f'unable to track selling order {passenger.tracking_order_id}. NOT FOUND'
         return
 
     details = order.get("OrderDetail")[0]
@@ -178,8 +170,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
         ordered_quantity = instrument.get("orderedQuantity")
         filled_quantity = instrument.get("filledQuantity") or 0
         pending_quantity = int(ordered_quantity) - int(filled_quantity)
-        update_fields = {'quantity': pending_quantity}
-        await update_passenger(passenger, update_fields)
+        passenger.quantity = pending_quantity
 
         quote = await etrade.get_quote(passenger.symbol)
         ask = get_ask(quote)
@@ -201,9 +192,8 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
             instrument = details.get("Instrument")[0]
             avg_execution_price = Decimal(
                 instrument.get("averageExecutionPrice"))
-            update_fields = {'status': AutoPilotTask.DONE,
-                             'exit_price': avg_execution_price}
-            await update_passenger(passenger, update_fields)
+            passenger.status = AutoPilotTask.DONE
+            passenger.exit_price = avg_execution_price
 
             percent = passenger.exit_percent
             percent_label = "profit" if percent > Decimal(0) else "loss"
@@ -214,8 +204,7 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
                                    f"{passenger.symbol} position sold for a {percent}% {percent_label}")
         else:
             # TODO: place sell order for scale out quantity
-            update_fields = {'quantity': quantity}
-            await update_passenger(passenger, update_fields)
+            passenger.quantity = quantity
 
             quote = await etrade.get_quote(passenger.symbol)
             ask = get_ask(quote)
@@ -223,11 +212,9 @@ async def sell_position(pilot_name: str, passenger: AutoPilotTask, etrade: Async
     else:
         logger.error("%s %s unhandled status %s for order %s",
                      PREFIX, pilot_name, status, passenger.tracking_order_id)
-        update_fields = {
-            'status': AutoPilotTask.PAUSED,
-            'state': AutoPilotTask.ERROR,
-            'error_message': f'unhandled status {status} for order {passenger.tracking_order_id}'}
-        await update_passenger(passenger, update_fields)
+        passenger.status = AutoPilotTask.PAUSED
+        passenger.state = AutoPilotTask.ERROR
+        passenger.error_message = f'unhandled status {status} for order {passenger.tracking_order_id}'
 
 
 async def follow_strategy(pilot_name: str, passenger: AutoPilotTask,
@@ -249,9 +236,8 @@ async def follow_strategy(pilot_name: str, passenger: AutoPilotTask,
 
         order_id = await place_sell_order(passenger, ask, etrade)
 
-        update_fields = {'state': AutoPilotTask.SELLING,
-                         'tracking_order_id': order_id}
-        await update_passenger(passenger, update_fields)
+        passenger.state = AutoPilotTask.SELLING
+        passenger.tracking_order_id = order_id
 
 
 async def minimize_loss(pilot_name: str, passenger: AutoPilotTask,
@@ -264,9 +250,7 @@ async def minimize_loss(pilot_name: str, passenger: AutoPilotTask,
     bid = get_bid(quote)
     ref_price_thresdhold = passenger.loss_ref_price + passenger.loss_amount * 2
     if bid > ref_price_thresdhold:
-        update_fields = {
-            'loss_ref_price': passenger.loss_ref_price + passenger.loss_amount}
-        await update_passenger(passenger, update_fields)
+        passenger.loss_ref_price = passenger.loss_ref_price + passenger.loss_amount
 
 
 async def track_position(pilot_name: str, passenger: AutoPilotTask, etrade: AsyncEtrade):
@@ -299,7 +283,7 @@ async def green_light(pilot_name: str, passenger: AutoPilotTask,
         logger.info("%s %s received signal MANUAL_OVERRIDE.",
                     PREFIX, pilot_name)
         logger.info("%s %s releasing control...", PREFIX, pilot_name)
-        await update_passenger(passenger, {'status': AutoPilotTask.DONE})
+        passenger.status = AutoPilotTask.DONE
         return False
 
     # if no market session, sleep until market opens
@@ -324,15 +308,17 @@ async def driver(name: str, queue: asyncio.Queue):
     logger.info("%s %s online.", PREFIX, name)
     try:
         passenger: AutoPilotTask = await queue.get()
-        await update_passenger(passenger, {'status': AutoPilotTask.RUNNING})
+        passenger.status = AutoPilotTask.RUNNING
+        await save_passenger(passenger)
 
         if passenger.discord_webhook:
             await post_webhook(passenger.discord_webhook,
                                f"{passenger.symbol} tracking...")
 
         while passenger.status == AutoPilotTask.RUNNING:
+            await refresh_passenger(passenger)
+            override_signal = passenger.signal
             etrade: AsyncEtrade = await get_provider(passenger)
-            override_signal = await refresh_passenger_signal(passenger)
             has_green_light = await green_light(name, passenger, etrade)
 
             if not has_green_light:
@@ -345,6 +331,7 @@ async def driver(name: str, queue: asyncio.Queue):
             else:
                 await track_position(name, passenger, etrade)
 
+            await save_passenger(passenger)
             await asyncio.sleep(1)
 
         # do not delete, keeping history is better
@@ -353,34 +340,29 @@ async def driver(name: str, queue: asyncio.Queue):
     except asyncio.CancelledError as e:
         logger.info("%s %s stopping...", PREFIX, name)
         # unexpected cancellation, mark as ready to run on server restart
-        update_fields = {'status': AutoPilotTask.READY,
-                         'tracking_data': passenger.tracking_data}
-        await update_passenger(passenger, update_fields)
+        passenger.status = AutoPilotTask.READY
         if passenger and passenger.discord_webhook:
             await post_webhook(
                 passenger.discord_webhook,
                 f"{passenger.symbol} autopilot unexpected cancel. {str(e)}"
             )
 
-    except Exception as exception:  # pylint: disable=broad-except
+    except:  # pylint: disable=bare-except
+        error_type, error, _ = sys.exc_info()
         logger.error("%s %s %s: %s", PREFIX, name,
-                     type(exception).__name__,
-                     str(exception), exc_info=1)
-        update_fields = {'status': AutoPilotTask.PAUSED,
-                         'state': AutoPilotTask.ERROR,
-                         'error_message': str(exception),
-                         'tracking_data': passenger.tracking_data}
-        await update_passenger(passenger, update_fields)
+                     error_type.__name__, str(error), exc_info=1)
+        passenger.status = AutoPilotTask.PAUSED
+        passenger.state = AutoPilotTask.ERROR
+        passenger.error_message = str(error)
         if passenger and passenger.discord_webhook:
             await post_webhook(
                 passenger.discord_webhook,
-                f"{passenger.symbol} autopilot {AutoPilotTask.TASK_STATUS[passenger.status][1]}. {str(exception)}"
+                f"{passenger.symbol} autopilot PAUSED. {error_type.__name__}: {str(error)}"
             )
     finally:
         logger.info("%s %s %s.", PREFIX, name,
                     AutoPilotTask.TASK_STATUS[passenger.status][1])
-        update_fields = {'tracking_data': passenger.tracking_data}
-        await update_passenger(passenger, update_fields)
+        await save_passenger(passenger)
         queue.task_done()
 
 
@@ -441,7 +423,8 @@ async def main():
             driver_name = f'driver.{passngr.id}/{passngr.symbol}'
             logger.debug("%s creating %s...", PREFIX, driver_name)
             await queue.put(passngr)
-            await update_passenger(passngr, {'status': AutoPilotTask.QUEUED})
+            passngr.status = AutoPilotTask.QUEUED
+            await save_passenger(passngr)
             asyncio.create_task(
                 driver(driver_name, queue))
             if queue.full():
