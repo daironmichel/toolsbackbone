@@ -29,7 +29,7 @@ PREFIX = "[autopilot]"
 def get_passengers():
     return list(
         AutoPilotTask.objects.all()
-        .select_related('provider', 'provider', 'strategy', 'account', 'user')
+        .select_related('provider', 'strategy', 'account', 'user')
         .filter(status=AutoPilotTask.READY)
     )
 
@@ -61,7 +61,9 @@ def save_passenger(passenger: AutoPilotTask):
 
 @database_sync_to_async
 def refresh_passenger(passenger: AutoPilotTask):
-    return passenger.refresh_from_db(fields=passenger.get_field_names())
+    deffered = {'provider', 'strategy', 'account', 'user'}
+    fields = deffered.union(passenger.get_field_names())
+    return passenger.refresh_from_db(fields=fields)
 
 
 async def post_webhook(webhook: str, msg: str):
