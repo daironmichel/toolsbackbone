@@ -299,6 +299,9 @@ class AutoPilotTask(models.Model):
     def __str__(self):
         return f'<AutoPilotTask: {self.id}, {self.symbol}, user:{self.user_id}>'
 
+    def get_field_names(self):
+        return {f.attname for f in self._meta.concrete_fields}
+
     @property
     def loss_amount(self) -> Decimal:
         return get_round_price(self.base_price * (self.strategy.loss_percent / Decimal('100')))
