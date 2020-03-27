@@ -43,7 +43,8 @@ def recall_stranded_passengers():
 
 
 @database_sync_to_async
-def get_stored_session(config):
+def get_stored_session(passenger: AutoPilotTask):
+    config = passenger.provider
     return ProviderSession.objects.filter(
         provider=config).first()
 
@@ -71,7 +72,7 @@ async def post_webhook(webhook: str, msg: str):
 
 
 async def get_provider(pilot: AutoPilotTask):
-    stored_session = await get_stored_session(pilot.provider)
+    stored_session = await get_stored_session(pilot)
     return AsyncEtrade(pilot.provider, stored_session)
 
 
