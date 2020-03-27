@@ -61,9 +61,9 @@ def save_passenger(passenger: AutoPilotTask):
 
 @database_sync_to_async
 def refresh_passenger(passenger: AutoPilotTask):
-    deffered = {'provider', 'strategy', 'account', 'user'}
-    fields = deffered.union(passenger.get_field_names())
-    return passenger.refresh_from_db(fields=fields)
+    return AutoPilotTask.objects.filter(id=passenger.id) \
+        .select_related('provider', 'strategy', 'account', 'user') \
+        .get()
 
 
 async def post_webhook(webhook: str, msg: str):
@@ -319,7 +319,7 @@ async def driver(name: str, queue: asyncio.Queue):
                                f"{passenger.symbol} tracking...")
 
         while passenger.status == AutoPilotTask.RUNNING:
-            await refresh_passenger(passenger)
+            passenger = await refresh_passenger(passenger)
             override_signal = passenger.signal
             etrade: AsyncEtrade = await get_provider(passenger)
             has_green_light = await green_light(name, passenger, etrade)
