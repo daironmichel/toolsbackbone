@@ -429,6 +429,8 @@ class Etrade:
 
     def _process_order_details(self, order_id, response):
         if response.status_code == 204:
+            logger.warning(
+                'Details for order %s failed with code 204 NOT FOUND.', order_id)
             return None  # Not Found
 
         data = response.json() if response.content else {}
@@ -442,7 +444,7 @@ class Etrade:
 
         orders_data = data.get("OrdersResponse", {}).get("Order", [])
         for order in orders_data:
-            if order["orderId"] == order_id:
+            if order["orderId"] == order_id or f"orders/{order_id}.json" in order["details"]:
                 return order
 
         return None

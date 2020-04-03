@@ -127,6 +127,11 @@ class AsyncEtrade(Etrade):
         return self._process_place_order(response)
 
     async def get_order_details(self, account_key, order_id, symbol):
+        if not order_id:
+            raise ValueError("param order_id required")
+        if not symbol:
+            raise ValueError("param symbol required")
+
         headers, params = self._prepare_order_details(symbol)
         response = await self.get(
             f'/accounts/{account_key}/orders.json', params=params, headers=headers)
