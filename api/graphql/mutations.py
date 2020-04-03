@@ -287,7 +287,13 @@ class SellStock(relay.ClientIDMutation):
                 'or configure a default accountKey on the provider.'
             )
 
-        turn_off_autopilot(info.context.user.id, symbol)
+        # turn_off_autopilot(info.context.user.id, symbol)
+        autopilot = get_autopilot(info.context.user.id, symbol)
+
+        if autopilot:
+            autopilot.signal = AutoPilotTask.SELL
+            autopilot.save()
+            return SellStock()
 
         etrade = get_provider_instance(provider)
         position_quantity = etrade.get_position_quantity(account_key, symbol)
