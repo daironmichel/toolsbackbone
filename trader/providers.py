@@ -114,6 +114,7 @@ class Etrade:
         service = self.service
 
         request_token, request_token_secret = service.get_request_token(
+            method="POST",
             params={"oauth_callback": "oob", "format": "json"})
 
         config_session = ProviderSession.objects.filter(
@@ -132,6 +133,7 @@ class Etrade:
         access_token, access_token_secret = service.get_access_token(
             config.session.request_token,
             config.session.request_token_secret,
+            method="POST",
             params={"oauth_verifier": oauth_verifier}
         )
 
