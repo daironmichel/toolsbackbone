@@ -167,6 +167,7 @@ class BuyStock(relay.ClientIDMutation):
         strategy_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
         price = graphene.Decimal()
+        quantity = graphene.Int()
         account_id = graphene.ID()
         autopilot = graphene.Boolean()
 
@@ -175,7 +176,7 @@ class BuyStock(relay.ClientIDMutation):
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id, provider_id,
-                               price=0, account_id=None, autopilot=False):
+                               price=0, quantity=0, account_id=None, autopilot=False):
         strategy = TradingStrategy.objects.get(id=strategy_id)
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
@@ -217,7 +218,7 @@ class BuyStock(relay.ClientIDMutation):
                 account=account,
                 is_otc=is_otc,
                 symbol=symbol,
-                quantity=0,
+                quantity=quantity,
                 entry_price=price,
                 base_price=price,
                 loss_ref_price=price,
@@ -229,15 +230,15 @@ class BuyStock(relay.ClientIDMutation):
             return BuyStock()
 
         if price:
-            last_price = Decimal(price)
+            limit_price = Decimal(price)
         else:
             quote = etrade.get_quote(symbol)
-            last_price = get_bid(quote)
+            limit_price = get_limit_price(OrderAction.BUY, get_bid(quote),
+                                          strategy.price_margin)
 
-        limit_price = get_limit_price(OrderAction.BUY, last_price,
-                                      strategy.price_margin)
-        quantity = strategy.get_quantity_for(
-            buying_power=account.total_account_value, price_per_share=last_price)
+        if not quantity:
+            quantity = strategy.get_quantity_for(
+                buying_power=account.total_account_value, price_per_share=limit_price)
 
         order_params = {
             'account_key': account_key,
@@ -267,13 +268,15 @@ class SellStock(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
+        price = graphene.Decimal()
+        quantity = graphene.Int()
         account_id = graphene.ID()
 
     error = graphene.Field(SellStockError)
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, symbol, provider_id, account_id=None):
+    def mutate_and_get_payload(cls, root, info, symbol, provider_id, price=0, quantity=0, account_id=None):
         account = Account.objects.get(id=account_id) if account_id else None
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
@@ -296,9 +299,16 @@ class SellStock(relay.ClientIDMutation):
             return SellStock()
 
         etrade = get_provider_instance(provider)
-        position_quantity = etrade.get_position_quantity(account_key, symbol)
-        quote = etrade.get_quote(symbol)
-        last_price = get_ask(quote)
+
+        if price:
+            limit_price = Decimal(price)
+        else:
+            quote = etrade.get_quote(symbol)
+            limit_price = get_limit_price(
+                OrderAction.SELL, get_ask(quote), margin=Decimal('0.01'))
+
+        if not quantity:
+            quantity = etrade.get_position_quantity(account_key, symbol)
 
         order_params = {
             'account_key': account_key,
@@ -306,8 +316,8 @@ class SellStock(relay.ClientIDMutation):
             'action': OrderAction.SELL.value,
             'symbol': symbol,
             'price_type': PriceType.LIMIT.value,
-            'quantity': position_quantity,
-            'limit_price': get_limit_price(OrderAction.SELL, last_price, margin=Decimal('0.01'))
+            'quantity': quantity,
+            'limit_price': limit_price
         }
 
         preview_ids = etrade.preview_order(
