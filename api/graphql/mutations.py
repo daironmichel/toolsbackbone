@@ -230,7 +230,7 @@ class BuyStock(relay.ClientIDMutation):
             return BuyStock()
 
         if price:
-            limit_price = Decimal(price)
+            limit_price = Decimal(price).quantize(Decimal('0.001'))
         else:
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(OrderAction.BUY, get_bid(quote),
@@ -301,7 +301,7 @@ class SellStock(relay.ClientIDMutation):
         etrade = get_provider_instance(provider)
 
         if price:
-            limit_price = Decimal(price)
+            limit_price = Decimal(price).quantize(Decimal('0.001'))
         else:
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(

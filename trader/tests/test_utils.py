@@ -34,6 +34,28 @@ def test__get_limit_price__buy_under_one_dollar__adds_correct_margin():
     assert result4 == Decimal('1')
 
 
+def test__get_limit_price__buy_over_one_dollar__adds_correct_margin():
+    margin1 = Decimal('0.01')
+    margin2 = Decimal('0.02')
+    margin3 = Decimal('0.03')
+    margin4 = Decimal('0.04')
+
+    price1 = Decimal('3.47')
+    price2 = Decimal('3.47')
+    price3 = Decimal('3.47')
+    price4 = Decimal('3.47')
+
+    result1 = get_limit_price(OrderAction.BUY, price1, margin1)
+    result2 = get_limit_price(OrderAction.BUY, price2, margin2)
+    result3 = get_limit_price(OrderAction.BUY_TO_COVER, price3, margin3)
+    result4 = get_limit_price(OrderAction.BUY_TO_COVER, price4, margin4)
+
+    assert result1 == Decimal('3.48')
+    assert result2 == Decimal('3.49')
+    assert result3 == Decimal('3.50')
+    assert result4 == Decimal('3.51')
+
+
 def test__get_limit_price__sell_under_one_dollar__substracts_correct_margin():
     margin1 = Decimal('0.01')
     margin2 = Decimal('0.02')
