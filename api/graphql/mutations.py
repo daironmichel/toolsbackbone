@@ -166,6 +166,7 @@ class BuyStock(relay.ClientIDMutation):
         provider_id = graphene.ID(required=True)
         strategy_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
+        margin = graphene.Decimal()
         price = graphene.Decimal()
         quantity = graphene.Int()
         account_id = graphene.ID()
@@ -176,7 +177,8 @@ class BuyStock(relay.ClientIDMutation):
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, symbol, strategy_id, provider_id,
-                               price=0, quantity=0, account_id=None, autopilot=False):
+                               margin='0.00', price='0.0000', quantity=0,
+                               account_id=None, autopilot=False):
         strategy = TradingStrategy.objects.get(id=strategy_id)
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
@@ -229,12 +231,12 @@ class BuyStock(relay.ClientIDMutation):
             task.save()
             return BuyStock()
 
-        if price:
-            limit_price = Decimal(price).quantize(Decimal('0.001'))
+        if Decimal(price):
+            limit_price = Decimal(price).quantize(Decimal('0.0001'))
         else:
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(OrderAction.BUY, get_bid(quote),
-                                          strategy.price_margin)
+                                          Decimal(margin) or strategy.price_margin)
 
         if not quantity:
             quantity = strategy.get_quantity_for(
@@ -268,6 +270,7 @@ class SellStock(relay.ClientIDMutation):
     class Input:
         provider_id = graphene.ID(required=True)
         symbol = graphene.String(required=True)
+        margin = graphene.Decimal()
         price = graphene.Decimal()
         quantity = graphene.Int()
         account_id = graphene.ID()
@@ -276,7 +279,9 @@ class SellStock(relay.ClientIDMutation):
     error_message = graphene.String()
 
     @classmethod
-    def mutate_and_get_payload(cls, root, info, symbol, provider_id, price=0, quantity=0, account_id=None):
+    def mutate_and_get_payload(cls, root, info, symbol, provider_id,
+                               margin='0.00', price='0.0000', quantity=0,
+                               account_id=None):
         account = Account.objects.get(id=account_id) if account_id else None
         provider = ServiceProvider.objects.select_related('session') \
             .get(id=provider_id)
@@ -300,12 +305,12 @@ class SellStock(relay.ClientIDMutation):
 
         etrade = get_provider_instance(provider)
 
-        if price:
-            limit_price = Decimal(price).quantize(Decimal('0.001'))
+        if Decimal(price):
+            limit_price = Decimal(price).quantize(Decimal('0.0001'))
         else:
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(
-                OrderAction.SELL, get_ask(quote), margin=Decimal('0.01'))
+                OrderAction.SELL, get_ask(quote), margin=Decimal(margin) or Decimal('0.01'))
 
         if not quantity:
             quantity = etrade.get_position_quantity(account_key, symbol)
