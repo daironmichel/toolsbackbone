@@ -234,9 +234,10 @@ class BuyStock(relay.ClientIDMutation):
         if Decimal(price):
             limit_price = Decimal(price).quantize(Decimal('0.0001'))
         else:
+            quantized_margin = Decimal(margin).quantize(Decimal('0.001'))
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(OrderAction.BUY, get_bid(quote),
-                                          Decimal(margin) or strategy.price_margin)
+                                          Decimal(quantized_margin) or strategy.price_margin)
 
         if not quantity:
             quantity = strategy.get_quantity_for(
@@ -308,9 +309,11 @@ class SellStock(relay.ClientIDMutation):
         if Decimal(price):
             limit_price = Decimal(price).quantize(Decimal('0.0001'))
         else:
+            quantized_margin = Decimal(margin).quantize(Decimal('0.001'))
+            print(f'margin: {Decimal(quantized_margin)}')
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(
-                OrderAction.SELL, get_ask(quote), margin=Decimal(margin) or Decimal('0.01'))
+                OrderAction.SELL, get_ask(quote), margin=Decimal(quantized_margin) or Decimal('0.01'))
 
         if not quantity:
             quantity = etrade.get_position_quantity(account_key, symbol)
