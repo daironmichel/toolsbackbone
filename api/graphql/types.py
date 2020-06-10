@@ -5,8 +5,9 @@ import graphene
 from graphene import relay
 from graphene_django.types import DjangoObjectType
 
-from trader.models import (Account, AutoPilotTask, Broker, ProviderSession,
-                           ServiceProvider, Settings, TradingStrategy)
+from trader.models import (Account, AutoPilotTask, Broker, BufferCash,
+                           ProviderSession, ServiceProvider, Settings,
+                           TradingStrategy)
 from trader.providers import get_provider_instance
 from trader.utils import get_ask, get_bid, get_last, get_volume
 
@@ -143,7 +144,21 @@ class ServiceProviderConnection(NonNullConnection):
     # edges = graphene.List(graphene.NonNull(ServiceProviderEdge), required=True)
 
 
+class BufferCashNode(DjangoObjectType):
+    class Meta:
+        model = BufferCash
+        interfaces = (relay.Node, DatabaseId)
+
+    @classmethod
+    # pylint: disable=redefined-builtin
+    def get_node(cls, info, id):
+        return BufferCash.objects.get(id=id)
+
+
 class AccountNode(DjangoObjectType):
+    buffer_cash = graphene.Field(BufferCashNode)
+    real_value = graphene.Float(required=True)
+
     class Meta:
         model = Account
         interfaces = (relay.Node, DatabaseId)
@@ -152,6 +167,12 @@ class AccountNode(DjangoObjectType):
     # pylint: disable=redefined-builtin
     def get_node(cls, info, id):
         return Account.objects.get(id=id)
+
+    def resolve_buffer_cash(self, info, **kwargs):
+        return BufferCash.objects.filter(account_id=self.id).first()
+
+    def resolve_real_value(self, info, **kwargs):
+        return self.real_value
 
 
 class AccountConnection(NonNullConnection):

@@ -57,6 +57,12 @@ class Account(models.Model):
     def __str__(self):
         return f'<Account: {self.id}, "{self.name}">'
 
+    @property
+    def real_value(self):
+        buffer_cash = BufferCash.objects.filter(account_id=self.id).first()
+        buffer_amount = buffer_cash.amount if buffer_cash else Decimal('0.00')
+        return self.total_account_value - buffer_amount
+
 
 class TradingStrategy(models.Model):
     name = models.CharField(max_length=250)
@@ -348,6 +354,20 @@ class AutoPilotTask(models.Model):
         gain = self.exit_price - self.entry_price
         percent = gain / self.entry_price * Decimal(100)
         return percent.quantize(Decimal('0.01'))
+
+
+class BufferCash(models.Model):
+    """Represents portion of an Account total value that is meant only
+    for giving a boost to the account. The buffer amount will
+    not be counted towards the real account value or the exposure 
+    percent when buying a security. The buffer amount will never be used
+    for buying securities.
+
+    Account Real Value = (Account Balance) - (Buffer Cash)
+    """
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    account = models.OneToOneField(
+        Account, on_delete=models.CASCADE, related_name='buffer_cash')
 
 
 class Settings(models.Model):

@@ -241,7 +241,7 @@ class BuyStock(relay.ClientIDMutation):
 
         if not quantity:
             quantity = strategy.get_quantity_for(
-                buying_power=account.total_account_value, price_per_share=limit_price)
+                buying_power=account.real_value, price_per_share=limit_price)
 
         order_params = {
             'account_key': account_key,

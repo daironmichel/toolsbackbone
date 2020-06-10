@@ -1,7 +1,8 @@
 from django.contrib import admin
 
-from trader.models import (Account, AutoPilotTask, Broker, ProviderSession,
-                           ServiceProvider, Settings, TradingStrategy)
+from trader.models import (Account, AutoPilotTask, Broker, BufferCash,
+                           ProviderSession, ServiceProvider, Settings,
+                           TradingStrategy)
 
 # Register your models here.
 
@@ -29,6 +30,14 @@ class AccountAdmin(admin.ModelAdmin):
                     'account_type', 'account_mode',
                     'pdt_status', 'cash_buying_power',
                     'margin_buying_power', 'last_updated', 'user')
+
+
+@admin.register(BufferCash)
+class BufferCashAdmin(admin.ModelAdmin):
+    list_display = ('id', 'account_name', 'amount')
+
+    def account_name(self, instance: BufferCash):
+        return instance.account.name
 
 
 @admin.register(ServiceProvider)
