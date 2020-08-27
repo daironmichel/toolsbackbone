@@ -313,7 +313,7 @@ class SellStock(relay.ClientIDMutation):
             print(f'margin: {Decimal(quantized_margin)}')
             quote = etrade.get_quote(symbol)
             limit_price = get_limit_price(
-                OrderAction.SELL, get_ask(quote), margin=Decimal(quantized_margin) or Decimal('0.01'))
+                OrderAction.SELL, get_ask(quote), margin=Decimal(quantized_margin) or Decimal('0.1'))
 
         if not quantity:
             quantity = etrade.get_position_quantity(account_key, symbol)
